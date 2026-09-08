@@ -66,7 +66,7 @@ Recruiting intake on n8n: duplicate detection, AI role tagging, every step logge
 > **Verified live: 20 submissions with 6 planted duplicates → 14 created, 6
 > flagged, 0 lost.** 72 automated tests run with no credentials and no network;
 > they drive the same JavaScript the n8n Code nodes run, so the tests and the
-> workflow cannot drift apart. Workflows exported as JSON on GitHub.
+> workflow cannot drift apart. Workflows exported as JSON: github.com/chapse57/intake-pipeline
 
 ## Skill tags
 
@@ -116,7 +116,7 @@ Two lines, then the specifics:
 
 ```
 Attached: an n8n → Notion → Claude intake pipeline built on the same shape as
-your spec (screenshots + GitHub). The part that matters for you: [their
+your spec — github.com/chapse57/intake-pipeline. The part that matters for you: [their
 requirement] — here is how it is handled: [node name / test number].
 ```
 

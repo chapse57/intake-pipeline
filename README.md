@@ -1,18 +1,32 @@
-# Intake Pipeline — fixtures and test suite
+# Intake Pipeline
 
-Recruiting intake: webhook → normalize → duplicate check → Claude proposes a
-role → deterministic guard → Notion → DocuSign → Xero, every step logged.
+Recruiting intake on n8n: webhook → normalize → duplicate check → Claude
+proposes a role → deterministic guard → Notion → Xero, with every step logged
+to an append-only Events table.
 
-This repository holds the parts that make the claims checkable: the fixture
-roster, the two JavaScript modules the n8n Code nodes run, and the tests that
-exercise them.
+Everything here is checkable. The workflows are exported as importable JSON,
+the JavaScript in this repo *is* the JavaScript the n8n Code nodes run, and 72
+tests exercise it with no credentials and no network.
+
+## What has actually run
+
+| | Status |
+|---|---|
+| WF-1 intake — dedupe, Claude, guard, Notion | **live**; 20 submissions → 14 created, 6 flagged, 0 lost |
+| WF-3 completion — idempotency, retry, alert | **live** against a real Xero organisation |
+| WF-0 error handler | **live**; it caught a real credential failure during setup |
+| WF-2 dispatch — DocuSign templates | built and structurally tested, **never run** (no sandbox yet) |
+
+`RUNBOOK.md` has the reproduction steps and what was measured. `PORTFOLIO.md`
+has the write-up and, more usefully, the list of claims that would be
+overreach.
 
 ```
 data/
   build_fixtures.py   regenerates the fixtures and verifies them against normalize.js
   candidates.csv      20 submissions, 6 planted duplicates, with expected outcomes
   recruiters.csv      4 recruiters
-  guard_cases.json    13 model outputs and the verdict each must receive
+  guard_cases.json    16 model outputs and the verdict each must receive
 n8n/
   normalize.js        email/phone normalization + duplicate classification
   guard.js            the deterministic check on the model's role proposal

@@ -1,0 +1,977 @@
+{
+  "name": "WF-3 Complete",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "docusign-complete",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "6373e73a-ba51-5e40-ac4d-10cab9df4644",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "d73b0ad5-63b1-5510-afd7-76feb52a2abc"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "44a75266-41cf-595c-b2a0-ceaadf333ad1",
+              "name": "notion_candidates_db",
+              "value": "4046c96105ea4b469edddf3d152cb1b2",
+              "type": "string"
+            },
+            {
+              "id": "ba2fce4c-876f-567e-af0a-effca71ecced",
+              "name": "notion_recruiters_db",
+              "value": "f515ee08573f4b05bae1d73892278d8f",
+              "type": "string"
+            },
+            {
+              "id": "3b43c0b8-edef-5d62-b7bf-9886520c8f5d",
+              "name": "notion_events_db",
+              "value": "ec414c5e2999473082f2a0522fe09a89",
+              "type": "string"
+            },
+            {
+              "id": "320d6010-f1f0-50b5-83ed-c2ce0dc88289",
+              "name": "anthropic_model",
+              "value": "claude-haiku-4-5-20251001",
+              "type": "string"
+            },
+            {
+              "id": "d77351bb-6312-5cbb-81ef-f73eb24f677e",
+              "name": "claude_system_prompt",
+              "value": "You classify sales-role applications for a coaching business. Reply with ONLY a JSON object and nothing else - no prose, no code fences. Shape: {\"role\": R, \"evidence_quote\": Q, \"confidence\": C}. R must be exactly one of these four strings: \"Setter\", \"Coach\", \"Closer\", \"Full Cycle\". Q must be ONE clause copied verbatim from the application text that supports R - the single most telling clause, no more than about 15 words. Never quote a whole sentence pair, never quote the whole text. Do not paraphrase, do not fix typos, do not add words. C is a number from 0 to 1 giving your confidence that R is the right role. If the text does not clearly support any of the four roles, pick the closest and set C below 0.5.",
+              "type": "string"
+            },
+            {
+              "id": "e39bf8f4-44a4-5c98-83f6-f16c1e058e39",
+              "name": "docusign_base_url",
+              "value": "https://demo.docusign.net/restapi/v2.1",
+              "type": "string"
+            },
+            {
+              "id": "9231a995-9342-53cf-b4c8-7ff2e2b53fb4",
+              "name": "docusign_account_id",
+              "value": "REPLACE_ME",
+              "type": "string"
+            },
+            {
+              "id": "907c7842-b6db-5c39-878b-032eb322e101",
+              "name": "docusign_role_name",
+              "value": "Signer",
+              "type": "string"
+            },
+            {
+              "id": "62463dc0-fc2b-5c43-b83f-a31c5fbd3d81",
+              "name": "template_setter",
+              "value": "REPLACE_ME",
+              "type": "string"
+            },
+            {
+              "id": "014b85b1-eb0d-5276-81b1-ac77ee08ec6e",
+              "name": "template_coach",
+              "value": "REPLACE_ME",
+              "type": "string"
+            },
+            {
+              "id": "f9f6967c-2a89-5ec8-8a16-d779affa25bb",
+              "name": "template_closer",
+              "value": "REPLACE_ME",
+              "type": "string"
+            },
+            {
+              "id": "2f12664d-95e0-54cc-8e40-bbb038cab6fb",
+              "name": "template_full_cycle",
+              "value": "REPLACE_ME",
+              "type": "string"
+            },
+            {
+              "id": "c31daa65-08d5-54a3-9b97-e2aed0d6e2b5",
+              "name": "xero_tenant_id",
+              "value": "REPLACE_ME",
+              "type": "string"
+            },
+            {
+              "id": "d3deea27-388c-5ba7-a4a3-96fe9b9f57a9",
+              "name": "xero_fault_domain",
+              "value": "",
+              "type": "string"
+            },
+            {
+              "id": "77fbc1d2-90c6-5692-9d0f-f907ea66768b",
+              "name": "xero_fault_url",
+              "value": "",
+              "type": "string"
+            },
+            {
+              "id": "7b84f6b7-809d-5620-b7c9-fcb1780ad164",
+              "name": "slack_webhook_url",
+              "value": "",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "32698101-5399-5004-9d49-ffda750dc5ef",
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        0
+      ],
+      "notes": "Fill REPLACE_ME values. Identical node in every workflow."
+    },
+    {
+      "parameters": {
+        "jsCode": "\n// Accepts DocuSign Connect's JSON SIM shape and the flat shape the tests post.\nconst b = $('Webhook').first().json.body || {};\nconst envelopeId =\n  (b.data && b.data.envelopeId) || b.envelopeId ||\n  (b.envelopeStatus && b.envelopeStatus.envelopeId) || '';\nlet status = (b.data && b.data.envelopeSummary && b.data.envelopeSummary.status) || b.status || '';\nif (!status && b.event === 'envelope-completed') status = 'completed';\nreturn [{ json: { envelope_id: String(envelopeId), status: String(status).toLowerCase(), raw: b } }];\n"
+      },
+      "id": "9a284219-bc60-5587-9518-937d52f7c728",
+      "name": "Parse event",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "219bf991-19c8-5bd8-9b95-caaa4f29741d",
+              "leftValue": "={{ $('Parse event').first().json.status === 'completed' && $('Parse event').first().json.envelope_id !== '' }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a64c3837-b46c-50d8-a2f4-322d5fac7e3c",
+      "name": "Completed?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        660,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.notion.com/v1/pages",
+        "options": {},
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "notionApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Notion-Version",
+              "value": "2022-06-28"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  parent: { database_id: $('Config').first().json.notion_events_db },\n  properties: {\n    Name: { title: [{ text: { content: String('webhook ignored').slice(0, 200) } }] },\n    Workflow: { select: { name: 'WF-3 Complete' } },\n    Step: { select: { name: 'docusign-webhook' } },\n    Result: { select: { name: 'skipped' } },\n    Detail: { rich_text: [{ text: { content: String('status=' + $('Parse event').first().json.status + ' envelope=' + $('Parse event').first().json.envelope_id).slice(0, 1900) } }] },\n    Timestamp: { date: { start: $now.toISO() } },\n    'Run ID': { rich_text: [{ text: { content: String($execution.id) } }] },\n    'Envelope ID': { rich_text: [{ text: { content: String($('Parse event').first().json.envelope_id || '') } }] },\n    Candidate: { relation: (null) ? [{ id: null }] : [] }\n  }\n}) }}"
+      },
+      "id": "fd33766f-5b5f-50df-8322-35cafe63d663",
+      "name": "Log: not completed",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        880,
+        200
+      ],
+      "credentials": {
+        "notionApi": {
+          "id": "nOFIsA9AWuU2qeLi",
+          "name": "Notion account"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "notes": "Logging must never take the pipeline down: continues on error."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ 'https://api.notion.com/v1/databases/' + $('Config').first().json.notion_candidates_db + '/query' }}",
+        "options": {},
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "notionApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Notion-Version",
+              "value": "2022-06-28"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ page_size: 100, filter: { property: 'Envelope ID', rich_text: { equals: $('Parse event').first().json.envelope_id } } }) }}"
+      },
+      "id": "d27ba341-5e01-540c-93e6-8c540bcf7111",
+      "name": "Find candidate",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        880,
+        0
+      ],
+      "credentials": {
+        "notionApi": {
+          "id": "nOFIsA9AWuU2qeLi",
+          "name": "Notion account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "0a4b8fa7-46f1-5789-bfe1-d6a725650f13",
+              "leftValue": "={{ ($json.results || []).length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "89915bde-28d4-5c8a-9d78-986e3d8f8608",
+      "name": "Known envelope?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1100,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.notion.com/v1/pages",
+        "options": {},
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "notionApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Notion-Version",
+              "value": "2022-06-28"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  parent: { database_id: $('Config').first().json.notion_events_db },\n  properties: {\n    Name: { title: [{ text: { content: String('unknown envelope').slice(0, 200) } }] },\n    Workflow: { select: { name: 'WF-3 Complete' } },\n    Step: { select: { name: 'docusign-webhook' } },\n    Result: { select: { name: 'rejected' } },\n    Detail: { rich_text: [{ text: { content: String('no candidate carries envelope ' + $('Parse event').first().json.envelope_id).slice(0, 1900) } }] },\n    Timestamp: { date: { start: $now.toISO() } },\n    'Run ID': { rich_text: [{ text: { content: String($execution.id) } }] },\n    'Envelope ID': { rich_text: [{ text: { content: String($('Parse event').first().json.envelope_id || '') } }] },\n    Candidate: { relation: (null) ? [{ id: null }] : [] }\n  }\n}) }}"
+      },
+      "id": "531073ef-c67f-5b30-9f0c-35c7091e8f84",
+      "name": "Log: unknown envelope",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1320,
+        200
+      ],
+      "credentials": {
+        "notionApi": {
+          "id": "nOFIsA9AWuU2qeLi",
+          "name": "Notion account"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "notes": "Logging must never take the pipeline down: continues on error."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ 'https://api.notion.com/v1/databases/' + $('Config').first().json.notion_events_db + '/query' }}",
+        "options": {},
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "notionApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Notion-Version",
+              "value": "2022-06-28"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ page_size: 100, filter: { and: [ { property: 'Envelope ID', rich_text: { equals: $('Parse event').first().json.envelope_id } }, { property: 'Step', select: { equals: 'xero-contact' } }, { property: 'Result', select: { equals: 'ok' } } ] } }) }}"
+      },
+      "id": "d294080c-9a36-56f2-91b8-1bed0e4ec9bb",
+      "name": "Already onboarded?",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1320,
+        0
+      ],
+      "credentials": {
+        "notionApi": {
+          "id": "nOFIsA9AWuU2qeLi",
+          "name": "Notion account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "92f4ac2f-f319-5a2a-b570-b28ce721b9e9",
+              "leftValue": "={{ ($json.results || []).length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "65e4460a-cf54-589b-a106-f7cf3cae436c",
+      "name": "First time?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1540,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.notion.com/v1/pages",
+        "options": {},
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "notionApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Notion-Version",
+              "value": "2022-06-28"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  parent: { database_id: $('Config').first().json.notion_events_db },\n  properties: {\n    Name: { title: [{ text: { content: String('replay').slice(0, 200) } }] },\n    Workflow: { select: { name: 'WF-3 Complete' } },\n    Step: { select: { name: 'idempotency' } },\n    Result: { select: { name: 'skipped' } },\n    Detail: { rich_text: [{ text: { content: String('envelope ' + $('Parse event').first().json.envelope_id + ' already produced a Xero contact; replay ignored').slice(0, 1900) } }] },\n    Timestamp: { date: { start: $now.toISO() } },\n    'Run ID': { rich_text: [{ text: { content: String($execution.id) } }] },\n    'Envelope ID': { rich_text: [{ text: { content: String($('Parse event').first().json.envelope_id || '') } }] },\n    Candidate: { relation: ($('Find candidate').first().json.results[0].id) ? [{ id: $('Find candidate').first().json.results[0].id }] : [] }\n  }\n}) }}"
+      },
+      "id": "acbad95e-4540-5302-90eb-c2d61203a871",
+      "name": "Log: replay skipped",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1760,
+        200
+      ],
+      "credentials": {
+        "notionApi": {
+          "id": "nOFIsA9AWuU2qeLi",
+          "name": "Notion account"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "notes": "Logging must never take the pipeline down: continues on error."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.notion.com/v1/pages",
+        "options": {},
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "notionApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Notion-Version",
+              "value": "2022-06-28"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  parent: { database_id: $('Config').first().json.notion_events_db },\n  properties: {\n    Name: { title: [{ text: { content: String('completed').slice(0, 200) } }] },\n    Workflow: { select: { name: 'WF-3 Complete' } },\n    Step: { select: { name: 'docusign-webhook' } },\n    Result: { select: { name: 'ok' } },\n    Detail: { rich_text: [{ text: { content: String('envelope ' + $('Parse event').first().json.envelope_id + ' completed').slice(0, 1900) } }] },\n    Timestamp: { date: { start: $now.toISO() } },\n    'Run ID': { rich_text: [{ text: { content: String($execution.id) } }] },\n    'Envelope ID': { rich_text: [{ text: { content: String($('Parse event').first().json.envelope_id || '') } }] },\n    Candidate: { relation: ($('Find candidate').first().json.results[0].id) ? [{ id: $('Find candidate').first().json.results[0].id }] : [] }\n  }\n}) }}"
+      },
+      "id": "e5aa60f5-4b4b-5dc0-84a6-967184f43ed3",
+      "name": "Log: webhook accepted",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1760,
+        0
+      ],
+      "credentials": {
+        "notionApi": {
+          "id": "nOFIsA9AWuU2qeLi",
+          "name": "Notion account"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "notes": "Logging must never take the pipeline down: continues on error."
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst cfg = $('Config').first().json;\nconst page = $('Find candidate').first().json.results[0];\nconst p = page.properties || {};\nconst rt = (x) => (x && x.rich_text ? x.rich_text.map(t => t.plain_text).join('') : '');\nconst name = p.Name && p.Name.title ? p.Name.title.map(t => t.plain_text).join('') : '';\nconst email = (p.Email && p.Email.email) || rt(p['Email Norm']);\nconst domain = rt(p['Email Domain']);\n// T10 fault seam. Both Config values blank => this branch cannot be taken.\nconst useFault = !!(cfg.xero_fault_domain && cfg.xero_fault_url && domain === cfg.xero_fault_domain);\nreturn [{ json: {\n  candidate_id: page.id,\n  name, email, domain,\n  fault_injected: useFault,\n  url: useFault ? cfg.xero_fault_url : 'https://api.xero.com/api.xro/2.0/Contacts',\n  body: { Contacts: [{ Name: name, EmailAddress: email, IsSupplier: true }] },\n} }];\n"
+      },
+      "id": "2a8200f0-b798-58ff-911d-207237cd1e36",
+      "name": "Prepare Xero request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1980,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Prepare Xero request').first().json.url }}",
+        "options": {},
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "xeroOAuth2Api",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "xero-tenant-id",
+              "value": "={{ $('Config').first().json.xero_tenant_id }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('Prepare Xero request').first().json.body) }}"
+      },
+      "id": "c83cdc06-e0a9-52f5-8869-f762086fa48d",
+      "name": "Xero: create contact",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2200,
+        0
+      ],
+      "credentials": {
+        "xeroOAuth2Api": {
+          "id": "40482635-9720-5ce7-87e5-0911835d9b2e",
+          "name": "Xero account"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "notes": "Retries are explicit (loop below) so every attempt is a visible Events row. Node-level retry is off on purpose."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.notion.com/v1/pages",
+        "options": {},
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "notionApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Notion-Version",
+              "value": "2022-06-28"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  parent: { database_id: $('Config').first().json.notion_events_db },\n  properties: {\n    Name: { title: [{ text: { content: String('xero ' + $('Prepare Xero request').first().json.name).slice(0, 200) } }] },\n    Workflow: { select: { name: 'WF-3 Complete' } },\n    Step: { select: { name: 'xero-contact' } },\n    Result: { select: { name: 'ok' } },\n    Detail: { rich_text: [{ text: { content: String('ContactID=' + ((($json.Contacts || [])[0] || {}).ContactID || '?') + (($('Prepare Xero request').first().json.fault_injected) ? ' (fault seam)' : '')).slice(0, 1900) } }] },\n    Timestamp: { date: { start: $now.toISO() } },\n    'Run ID': { rich_text: [{ text: { content: String($execution.id) } }] },\n    'Envelope ID': { rich_text: [{ text: { content: String($('Parse event').first().json.envelope_id || '') } }] },\n    Candidate: { relation: ($('Prepare Xero request').first().json.candidate_id) ? [{ id: $('Prepare Xero request').first().json.candidate_id }] : [] }\n  }\n}) }}"
+      },
+      "id": "cfff1052-3c6f-5ad0-ab5c-4e73694bbc50",
+      "name": "Log: xero ok",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2420,
+        -100
+      ],
+      "credentials": {
+        "notionApi": {
+          "id": "nOFIsA9AWuU2qeLi",
+          "name": "Notion account"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "notes": "Logging must never take the pipeline down: continues on error."
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ 'https://api.notion.com/v1/pages/' + ($('Prepare Xero request').first().json.candidate_id) }}",
+        "options": {},
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "notionApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Notion-Version",
+              "value": "2022-06-28"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ properties: { 'Xero Contact ID': { rich_text: [{ text: { content: String(((($('Xero: create contact').first().json.Contacts || [])[0] || {}).ContactID) || '') } }] }, Status: { select: { name: 'Onboarded' } } } }) }}"
+      },
+      "id": "626b0217-b643-5f23-9774-856c013a1650",
+      "name": "Mark onboarded",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2640,
+        -100
+      ],
+      "credentials": {
+        "notionApi": {
+          "id": "nOFIsA9AWuU2qeLi",
+          "name": "Notion account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst err = $json.error;\nconst msg = err ? (typeof err === 'string' ? err : (err.message || JSON.stringify(err))) : 'unknown error';\nreturn [{ json: { attempt: $runIndex + 1, error: String(msg).slice(0, 500) } }];\n"
+      },
+      "id": "df2e2177-d5cf-5bc8-98a0-282a37d5072e",
+      "name": "Count attempt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2420,
+        150
+      ],
+      "notes": "$runIndex increments each time the loop comes back through here."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.notion.com/v1/pages",
+        "options": {},
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "notionApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Notion-Version",
+              "value": "2022-06-28"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  parent: { database_id: $('Config').first().json.notion_events_db },\n  properties: {\n    Name: { title: [{ text: { content: String('xero attempt ' + $json.attempt + ' ' + $('Prepare Xero request').first().json.name).slice(0, 200) } }] },\n    Workflow: { select: { name: 'WF-3 Complete' } },\n    Step: { select: { name: 'xero-contact' } },\n    Result: { select: { name: 'error' } },\n    Detail: { rich_text: [{ text: { content: String('attempt ' + $json.attempt + ': ' + $json.error).slice(0, 1900) } }] },\n    Timestamp: { date: { start: $now.toISO() } },\n    'Run ID': { rich_text: [{ text: { content: String($execution.id) } }] },\n    'Envelope ID': { rich_text: [{ text: { content: String($('Parse event').first().json.envelope_id || '') } }] },\n    Candidate: { relation: ($('Prepare Xero request').first().json.candidate_id) ? [{ id: $('Prepare Xero request').first().json.candidate_id }] : [] }\n  }\n}) }}"
+      },
+      "id": "48ea4ca8-66c7-5656-a997-559adf7e041e",
+      "name": "Log: xero failed",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2640,
+        150
+      ],
+      "credentials": {
+        "notionApi": {
+          "id": "nOFIsA9AWuU2qeLi",
+          "name": "Notion account"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "notes": "Logging must never take the pipeline down: continues on error."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "8ce1f1d4-ca5b-54ed-8e3d-8a888434389b",
+              "leftValue": "={{ $('Count attempt').first().json.attempt }}",
+              "rightValue": 3,
+              "operator": {
+                "type": "number",
+                "operation": "lt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "fca8154c-41e0-5933-bdff-ba041633a0d3",
+      "name": "Retry?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2860,
+        150
+      ]
+    },
+    {
+      "parameters": {
+        "amount": 2,
+        "unit": "seconds"
+      },
+      "id": "ecbe392a-f451-5d12-8ddb-f964dac48ef4",
+      "name": "Wait 2s",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        3080,
+        50
+      ],
+      "webhookId": "40c9a0d6-5484-5732-83d0-4b198ef294ab"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.notion.com/v1/pages",
+        "options": {},
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "notionApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Notion-Version",
+              "value": "2022-06-28"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  parent: { database_id: $('Config').first().json.notion_events_db },\n  properties: {\n    Name: { title: [{ text: { content: String('xero gave up ' + $('Prepare Xero request').first().json.name).slice(0, 200) } }] },\n    Workflow: { select: { name: 'WF-3 Complete' } },\n    Step: { select: { name: 'error' } },\n    Result: { select: { name: 'error' } },\n    Detail: { rich_text: [{ text: { content: String('Xero contact creation failed after ' + $('Count attempt').first().json.attempt + ' attempts: ' + $('Count attempt').first().json.error).slice(0, 1900) } }] },\n    Timestamp: { date: { start: $now.toISO() } },\n    'Run ID': { rich_text: [{ text: { content: String($execution.id) } }] },\n    'Envelope ID': { rich_text: [{ text: { content: String($('Parse event').first().json.envelope_id || '') } }] },\n    Candidate: { relation: ($('Prepare Xero request').first().json.candidate_id) ? [{ id: $('Prepare Xero request').first().json.candidate_id }] : [] }\n  }\n}) }}"
+      },
+      "id": "7fdfb744-8e88-50e8-843c-24051347a04f",
+      "name": "Log: gave up",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3080,
+        250
+      ],
+      "credentials": {
+        "notionApi": {
+          "id": "nOFIsA9AWuU2qeLi",
+          "name": "Notion account"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "notes": "Logging must never take the pipeline down: continues on error."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Config').first().json.slack_webhook_url }}",
+        "options": {},
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ text: ':x: Xero contact failed after ' + $('Count attempt').first().json.attempt + ' attempts for ' + $('Prepare Xero request').first().json.name + ' (envelope ' + $('Parse event').first().json.envelope_id + ')\\n' + $('Count attempt').first().json.error }) }}"
+      },
+      "id": "0764de7a-c8ff-5a88-8523-3f4458771892",
+      "name": "Slack: xero failed",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3300,
+        250
+      ],
+      "onError": "continueRegularOutput",
+      "notes": "Incoming-webhook URL from Config. Blank URL fails quietly."
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "Parse event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse event": {
+      "main": [
+        [
+          {
+            "node": "Completed?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Completed?": {
+      "main": [
+        [
+          {
+            "node": "Find candidate",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log: not completed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find candidate": {
+      "main": [
+        [
+          {
+            "node": "Known envelope?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Known envelope?": {
+      "main": [
+        [
+          {
+            "node": "Already onboarded?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log: unknown envelope",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Already onboarded?": {
+      "main": [
+        [
+          {
+            "node": "First time?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "First time?": {
+      "main": [
+        [
+          {
+            "node": "Log: webhook accepted",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log: replay skipped",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log: webhook accepted": {
+      "main": [
+        [
+          {
+            "node": "Prepare Xero request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Xero request": {
+      "main": [
+        [
+          {
+            "node": "Xero: create contact",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Xero: create contact": {
+      "main": [
+        [
+          {
+            "node": "Log: xero ok",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Count attempt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log: xero ok": {
+      "main": [
+        [
+          {
+            "node": "Mark onboarded",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Count attempt": {
+      "main": [
+        [
+          {
+            "node": "Log: xero failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log: xero failed": {
+      "main": [
+        [
+          {
+            "node": "Retry?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Retry?": {
+      "main": [
+        [
+          {
+            "node": "Wait 2s",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log: gave up",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait 2s": {
+      "main": [
+        [
+          {
+            "node": "Xero: create contact",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log: gave up": {
+      "main": [
+        [
+          {
+            "node": "Slack: xero failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}

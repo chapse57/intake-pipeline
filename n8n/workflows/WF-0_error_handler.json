@@ -1,0 +1,230 @@
+{
+  "name": "WF-0 Error Handler",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "ab096145-515b-5c0d-9e90-9acda1e1a5a8",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "f1842e3d-49bd-540c-996f-466b39e43ff7",
+              "name": "notion_candidates_db",
+              "value": "4046c96105ea4b469edddf3d152cb1b2",
+              "type": "string"
+            },
+            {
+              "id": "1721a421-6199-5be1-9ad3-72a0dcf8bb6c",
+              "name": "notion_recruiters_db",
+              "value": "f515ee08573f4b05bae1d73892278d8f",
+              "type": "string"
+            },
+            {
+              "id": "0f36bfe5-9d38-577a-b059-e88596176ff0",
+              "name": "notion_events_db",
+              "value": "ec414c5e2999473082f2a0522fe09a89",
+              "type": "string"
+            },
+            {
+              "id": "dd690ce7-022e-586f-b9e2-e2c6237df213",
+              "name": "anthropic_model",
+              "value": "claude-haiku-4-5-20251001",
+              "type": "string"
+            },
+            {
+              "id": "1000aded-1d57-53fd-bee7-3d09be944348",
+              "name": "claude_system_prompt",
+              "value": "You classify sales-role applications for a coaching business. Reply with ONLY a JSON object and nothing else - no prose, no code fences. Shape: {\"role\": R, \"evidence_quote\": Q, \"confidence\": C}. R must be exactly one of these four strings: \"Setter\", \"Coach\", \"Closer\", \"Full Cycle\". Q must be ONE clause copied verbatim from the application text that supports R - the single most telling clause, no more than about 15 words. Never quote a whole sentence pair, never quote the whole text. Do not paraphrase, do not fix typos, do not add words. C is a number from 0 to 1 giving your confidence that R is the right role. If the text does not clearly support any of the four roles, pick the closest and set C below 0.5.",
+              "type": "string"
+            },
+            {
+              "id": "e4f0da6f-1210-5223-b50a-6d620c2a4d3e",
+              "name": "docusign_base_url",
+              "value": "https://demo.docusign.net/restapi/v2.1",
+              "type": "string"
+            },
+            {
+              "id": "eccd71c2-2af1-540d-8026-dd9017880973",
+              "name": "docusign_account_id",
+              "value": "REPLACE_ME",
+              "type": "string"
+            },
+            {
+              "id": "34c5a9f9-c626-5620-b80b-fe0888d381fe",
+              "name": "docusign_role_name",
+              "value": "Signer",
+              "type": "string"
+            },
+            {
+              "id": "d5f7699e-f869-50cf-ae87-d40692b7bf7d",
+              "name": "template_setter",
+              "value": "REPLACE_ME",
+              "type": "string"
+            },
+            {
+              "id": "012d0640-bc2f-5051-beaf-7af7999d35c8",
+              "name": "template_coach",
+              "value": "REPLACE_ME",
+              "type": "string"
+            },
+            {
+              "id": "2a0583fa-8c48-536e-9ce9-fd345742fd13",
+              "name": "template_closer",
+              "value": "REPLACE_ME",
+              "type": "string"
+            },
+            {
+              "id": "1717a358-6411-5806-808f-2362fc2f190b",
+              "name": "template_full_cycle",
+              "value": "REPLACE_ME",
+              "type": "string"
+            },
+            {
+              "id": "85e0ef1e-2b4a-55dc-aec3-1c11d08024ed",
+              "name": "xero_tenant_id",
+              "value": "REPLACE_ME",
+              "type": "string"
+            },
+            {
+              "id": "93cccd4c-d9ad-59c3-8989-91c3ae46e2b6",
+              "name": "xero_fault_domain",
+              "value": "",
+              "type": "string"
+            },
+            {
+              "id": "03dc6794-bd5a-59f7-92d5-1ef64d257821",
+              "name": "xero_fault_url",
+              "value": "",
+              "type": "string"
+            },
+            {
+              "id": "a0f2b256-19dd-5f90-93fd-47a09209afd4",
+              "name": "slack_webhook_url",
+              "value": "",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "49216994-dc70-5eef-b51c-ea5f850f105a",
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        0
+      ],
+      "notes": "Fill REPLACE_ME values. Identical node in every workflow."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.notion.com/v1/pages",
+        "options": {},
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "notionApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Notion-Version",
+              "value": "2022-06-28"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  parent: { database_id: $('Config').first().json.notion_events_db },\n  properties: {\n    Name: { title: [{ text: { content: String($('Error Trigger').first().json.workflow.name + ' failed').slice(0, 200) } }] },\n    Workflow: { select: { name: 'Error Handler' } },\n    Step: { select: { name: 'error' } },\n    Result: { select: { name: 'error' } },\n    Detail: { rich_text: [{ text: { content: String('workflow=' + $('Error Trigger').first().json.workflow.name + ' | node=' + ($('Error Trigger').first().json.execution.lastNodeExecuted || '?') + ' | ' + ($('Error Trigger').first().json.execution.error.message || 'no message') + ' | ' + ($('Error Trigger').first().json.execution.url || '')).slice(0, 1900) } }] },\n    Timestamp: { date: { start: $now.toISO() } },\n    'Run ID': { rich_text: [{ text: { content: String($execution.id) } }] },\n    'Envelope ID': { rich_text: [{ text: { content: String('' || '') } }] },\n    Candidate: { relation: (null) ? [{ id: null }] : [] }\n  }\n}) }}"
+      },
+      "id": "97f990c4-6a33-56d6-8cb4-30c27c28ae54",
+      "name": "Log: error",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        440,
+        0
+      ],
+      "credentials": {
+        "notionApi": {
+          "id": "nOFIsA9AWuU2qeLi",
+          "name": "Notion account"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "notes": "Logging must never take the pipeline down: continues on error."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Config').first().json.slack_webhook_url }}",
+        "options": {},
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ text: ':rotating_light: ' + $('Error Trigger').first().json.workflow.name + ' failed at ' + ($('Error Trigger').first().json.execution.lastNodeExecuted || '?') + '\\n' + ($('Error Trigger').first().json.execution.error.message || '') + '\\n' + ($('Error Trigger').first().json.execution.url || '') }) }}"
+      },
+      "id": "ae38d02e-c91d-5c23-b100-cab7536d5ca7",
+      "name": "Slack: alert",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        660,
+        0
+      ],
+      "onError": "continueRegularOutput",
+      "notes": "Incoming-webhook URL from Config. Blank URL fails quietly."
+    }
+  ],
+  "connections": {
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "Log: error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log: error": {
+      "main": [
+        [
+          {
+            "node": "Slack: alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}

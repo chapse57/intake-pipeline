@@ -1,0 +1,234 @@
+[
+  {
+    "id": "G-accept-setter",
+    "test": "T-guard-baseline",
+    "application_text": "I came into sales through a customer-support desk, which is where I learned that most people who say no are really saying not yet. Most of my week is cold outreach. I book between fifteen and twenty discovery calls a week from cold lists, and I hand every qualified one to a closer with notes on what the prospect said, what they objected to and what they seemed to want. I keep my own tracking sheet because the CRM never quite matches how I work. I have never run the money conversation myself and I am not trying to; I like the front of the funnel and I am good at it. Available from the first of next month, remote or hybrid.",
+    "llm_output": {
+      "role": "Setter",
+      "evidence_quote": "I book between fifteen and twenty discovery calls a week from cold lists",
+      "confidence": 0.93
+    },
+    "expect": {
+      "verdict": "accept",
+      "reason": "ok"
+    }
+  },
+  {
+    "id": "G-accept-quote-reflowed",
+    "test": "T-guard-baseline",
+    "application_text": "I came into sales through a customer-support desk, which is where I learned that most people who say no are really saying not yet. Most of my week is cold outreach. I book between fifteen and twenty discovery calls a week from cold lists, and I hand every qualified one to a closer with notes on what the prospect said, what they objected to and what they seemed to want. I keep my own tracking sheet because the CRM never quite matches how I work. I have never run the money conversation myself and I am not trying to; I like the front of the funnel and I am good at it. Available from the first of next month, remote or hybrid.",
+    "llm_output": {
+      "role": "Setter",
+      "evidence_quote": "I book between fifteen   and twenty\n discovery calls a week",
+      "confidence": 0.81
+    },
+    "expect": {
+      "verdict": "accept",
+      "reason": "ok"
+    },
+    "why": "whitespace and line breaks are folded; the words are unchanged"
+  },
+  {
+    "id": "G-T5-role-manager",
+    "test": "T5",
+    "application_text": "Eight years in high-ticket coaching sales, the last three of them fully remote. I take over once a call is booked. I run the closing call and take payment on the call itself, and last year I carried a personal quota of 1.2M with a 31 percent close rate on qualified opportunities. I do not prospect and I am not interested in roles where closers are expected to fill their own calendar; that is a different job. What I bring is the conversation at the end - handling the objection about money, the objection about time, and the one about the spouse. References from two previous programme owners available on request.",
+    "llm_output": {
+      "role": "Manager",
+      "evidence_quote": "I run the closing call and take payment on the call itself",
+      "confidence": 0.96
+    },
+    "expect": {
+      "verdict": "reject",
+      "reason": "role_not_allowed"
+    },
+    "why": "a confident, well-evidenced answer outside the vocabulary is still rejected"
+  },
+  {
+    "id": "G-T5-role-case",
+    "test": "T5",
+    "application_text": "Eight years in high-ticket coaching sales, the last three of them fully remote. I take over once a call is booked. I run the closing call and take payment on the call itself, and last year I carried a personal quota of 1.2M with a 31 percent close rate on qualified opportunities. I do not prospect and I am not interested in roles where closers are expected to fill their own calendar; that is a different job. What I bring is the conversation at the end - handling the objection about money, the objection about time, and the one about the spouse. References from two previous programme owners available on request.",
+    "llm_output": {
+      "role": "closer",
+      "evidence_quote": "I run the closing call and take payment on the call itself",
+      "confidence": 0.9
+    },
+    "expect": {
+      "verdict": "reject",
+      "reason": "role_not_allowed"
+    },
+    "why": "no silent case repair — Notion's Select would create a second option"
+  },
+  {
+    "id": "G-T6-quote-invented",
+    "test": "T6",
+    "application_text": "Eight years in high-ticket coaching sales, the last three of them fully remote. I take over once a call is booked. I run the closing call and take payment on the call itself, and last year I carried a personal quota of 1.2M with a 31 percent close rate on qualified opportunities. I do not prospect and I am not interested in roles where closers are expected to fill their own calendar; that is a different job. What I bring is the conversation at the end - handling the objection about money, the objection about time, and the one about the spouse. References from two previous programme owners available on request.",
+    "llm_output": {
+      "role": "Closer",
+      "evidence_quote": "I have consistently exceeded my targets in a closing capacity",
+      "confidence": 0.94
+    },
+    "expect": {
+      "verdict": "reject",
+      "reason": "evidence_not_in_source"
+    },
+    "why": "plausible, on-topic, and nowhere in the application"
+  },
+  {
+    "id": "G-T6-quote-paraphrased",
+    "test": "T6",
+    "application_text": "Eight years in high-ticket coaching sales, the last three of them fully remote. I take over once a call is booked. I run the closing call and take payment on the call itself, and last year I carried a personal quota of 1.2M with a 31 percent close rate on qualified opportunities. I do not prospect and I am not interested in roles where closers are expected to fill their own calendar; that is a different job. What I bring is the conversation at the end - handling the objection about money, the objection about time, and the one about the spouse. References from two previous programme owners available on request.",
+    "llm_output": {
+      "role": "Closer",
+      "evidence_quote": "I run closing calls and take payment during the call",
+      "confidence": 0.9
+    },
+    "expect": {
+      "verdict": "reject",
+      "reason": "evidence_not_in_source"
+    },
+    "why": "a paraphrase of a real sentence is not a quote"
+  },
+  {
+    "id": "G-T6-quote-is-the-whole-text",
+    "test": "T6",
+    "application_text": "Eight years in high-ticket coaching sales, the last three of them fully remote. I take over once a call is booked. I run the closing call and take payment on the call itself, and last year I carried a personal quota of 1.2M with a 31 percent close rate on qualified opportunities. I do not prospect and I am not interested in roles where closers are expected to fill their own calendar; that is a different job. What I bring is the conversation at the end - handling the objection about money, the objection about time, and the one about the spouse. References from two previous programme owners available on request.",
+    "llm_output": {
+      "role": "Closer",
+      "evidence_quote": "Eight years in high-ticket coaching sales, the last three of them fully remote. I take over once a call is booked. I run the closing call and take payment on the call itself, and last year I carried a personal quota of 1.2M with a 31 percent close rate on qualified opportunities. I do not prospect and I am not interested in roles where closers are expected to fill their own calendar; that is a different job. What I bring is the conversation at the end - handling the objection about money, the objection about time, and the one about the spouse. References from two previous programme owners available on request.",
+      "confidence": 0.97
+    },
+    "expect": {
+      "verdict": "reject",
+      "reason": "evidence_too_long"
+    },
+    "why": "quoting the whole document is in the source by definition; that proves nothing"
+  },
+  {
+    "id": "G-T6-quote-is-most-of-the-text",
+    "test": "T6",
+    "application_text": "Eight years in high-ticket coaching sales, the last three of them fully remote. I take over once a call is booked. I run the closing call and take payment on the call itself, and last year I carried a personal quota of 1.2M with a 31 percent close rate on qualified opportunities. I do not prospect and I am not interested in roles where closers are expected to fill their own calendar; that is a different job. What I bring is the conversation at the end - handling the objection about money, the objection about time, and the one about the spouse. References from two previous programme owners available on request.",
+    "llm_output": {
+      "role": "Closer",
+      "evidence_quote": "Eight years in high-ticket coaching sales, the last three of them fully remote. I take over once a call is booked. I run the closing call and take payment on the call itself, and last year I carried a personal quota of 1.2M with a 31 percent close rate on qualified opportunities. I do not prospect and I am not interested in roles where c",
+      "confidence": 0.98
+    },
+    "expect": {
+      "verdict": "reject",
+      "reason": "evidence_too_long"
+    },
+    "why": "over half the document is not a quote, whatever the model thinks"
+  },
+  {
+    "id": "G-accept-two-sentence-quote-in-long-text",
+    "test": "T-guard-baseline",
+    "application_text": "Eight years in high-ticket coaching sales, the last three of them fully remote. I take over once a call is booked. I run the closing call and take payment on the call itself, and last year I carried a personal quota of 1.2M with a 31 percent close rate on qualified opportunities. I do not prospect and I am not interested in roles where closers are expected to fill their own calendar; that is a different job. What I bring is the conversation at the end - handling the objection about money, the objection about time, and the one about the spouse. References from two previous programme owners available on request.",
+    "llm_output": {
+      "role": "Closer",
+      "evidence_quote": "I take over once a call is booked. I run the closing call and take payment on the call itself",
+      "confidence": 0.95
+    },
+    "expect": {
+      "verdict": "accept",
+      "reason": "ok"
+    },
+    "why": "what Haiku actually returns for this text: ~20 words. Fine in a 500-char application, a problem only when the application itself is two sentences"
+  },
+  {
+    "id": "G-T7-low-confidence",
+    "test": "T7",
+    "application_text": "I came into sales through a customer-support desk, which is where I learned that most people who say no are really saying not yet. Most of my week is cold outreach. I book between fifteen and twenty discovery calls a week from cold lists, and I hand every qualified one to a closer with notes on what the prospect said, what they objected to and what they seemed to want. I keep my own tracking sheet because the CRM never quite matches how I work. I have never run the money conversation myself and I am not trying to; I like the front of the funnel and I am good at it. Available from the first of next month, remote or hybrid.",
+    "llm_output": {
+      "role": "Setter",
+      "evidence_quote": "I book between fifteen and twenty discovery calls a week from cold lists",
+      "confidence": 0.5
+    },
+    "expect": {
+      "verdict": "review",
+      "reason": "below_confidence_floor"
+    }
+  },
+  {
+    "id": "G-T7-at-floor",
+    "test": "T7",
+    "application_text": "I came into sales through a customer-support desk, which is where I learned that most people who say no are really saying not yet. Most of my week is cold outreach. I book between fifteen and twenty discovery calls a week from cold lists, and I hand every qualified one to a closer with notes on what the prospect said, what they objected to and what they seemed to want. I keep my own tracking sheet because the CRM never quite matches how I work. I have never run the money conversation myself and I am not trying to; I like the front of the funnel and I am good at it. Available from the first of next month, remote or hybrid.",
+    "llm_output": {
+      "role": "Setter",
+      "evidence_quote": "I book between fifteen and twenty discovery calls a week from cold lists",
+      "confidence": 0.7
+    },
+    "expect": {
+      "verdict": "accept",
+      "reason": "ok"
+    },
+    "why": "the floor is inclusive; pinned so the boundary cannot drift"
+  },
+  {
+    "id": "G-malformed-string",
+    "test": "T-guard-robustness",
+    "application_text": "I came into sales through a customer-support desk, which is where I learned that most people who say no are really saying not yet. Most of my week is cold outreach. I book between fifteen and twenty discovery calls a week from cold lists, and I hand every qualified one to a closer with notes on what the prospect said, what they objected to and what they seemed to want. I keep my own tracking sheet because the CRM never quite matches how I work. I have never run the money conversation myself and I am not trying to; I like the front of the funnel and I am good at it. Available from the first of next month, remote or hybrid.",
+    "llm_output": "Sure! Here is the JSON you asked for: {\"role\": \"Setter\"}",
+    "expect": {
+      "verdict": "reject",
+      "reason": "not_json"
+    },
+    "why": "the model prefixing prose to its JSON must not crash the node"
+  },
+  {
+    "id": "G-confidence-string",
+    "test": "T-guard-robustness",
+    "application_text": "I came into sales through a customer-support desk, which is where I learned that most people who say no are really saying not yet. Most of my week is cold outreach. I book between fifteen and twenty discovery calls a week from cold lists, and I hand every qualified one to a closer with notes on what the prospect said, what they objected to and what they seemed to want. I keep my own tracking sheet because the CRM never quite matches how I work. I have never run the money conversation myself and I am not trying to; I like the front of the funnel and I am good at it. Available from the first of next month, remote or hybrid.",
+    "llm_output": {
+      "role": "Setter",
+      "evidence_quote": "I book between fifteen and twenty discovery calls a week from cold lists",
+      "confidence": "0.95"
+    },
+    "expect": {
+      "verdict": "reject",
+      "reason": "confidence_not_a_number"
+    },
+    "why": "'0.95' < 0.7 is false in JS for the wrong reason; typed explicitly instead"
+  },
+  {
+    "id": "G-confidence-out-of-range",
+    "test": "T-guard-robustness",
+    "application_text": "I came into sales through a customer-support desk, which is where I learned that most people who say no are really saying not yet. Most of my week is cold outreach. I book between fifteen and twenty discovery calls a week from cold lists, and I hand every qualified one to a closer with notes on what the prospect said, what they objected to and what they seemed to want. I keep my own tracking sheet because the CRM never quite matches how I work. I have never run the money conversation myself and I am not trying to; I like the front of the funnel and I am good at it. Available from the first of next month, remote or hybrid.",
+    "llm_output": {
+      "role": "Setter",
+      "evidence_quote": "I book between fifteen and twenty discovery calls a week from cold lists",
+      "confidence": 12
+    },
+    "expect": {
+      "verdict": "reject",
+      "reason": "confidence_out_of_range"
+    }
+  },
+  {
+    "id": "G-evidence-empty",
+    "test": "T-guard-robustness",
+    "application_text": "I came into sales through a customer-support desk, which is where I learned that most people who say no are really saying not yet. Most of my week is cold outreach. I book between fifteen and twenty discovery calls a week from cold lists, and I hand every qualified one to a closer with notes on what the prospect said, what they objected to and what they seemed to want. I keep my own tracking sheet because the CRM never quite matches how I work. I have never run the money conversation myself and I am not trying to; I like the front of the funnel and I am good at it. Available from the first of next month, remote or hybrid.",
+    "llm_output": {
+      "role": "Setter",
+      "evidence_quote": "",
+      "confidence": 0.99
+    },
+    "expect": {
+      "verdict": "reject",
+      "reason": "evidence_missing_or_too_short"
+    }
+  },
+  {
+    "id": "G-evidence-single-word",
+    "test": "T-guard-robustness",
+    "application_text": "I came into sales through a customer-support desk, which is where I learned that most people who say no are really saying not yet. Most of my week is cold outreach. I book between fifteen and twenty discovery calls a week from cold lists, and I hand every qualified one to a closer with notes on what the prospect said, what they objected to and what they seemed to want. I keep my own tracking sheet because the CRM never quite matches how I work. I have never run the money conversation myself and I am not trying to; I like the front of the funnel and I am good at it. Available from the first of next month, remote or hybrid.",
+    "llm_output": {
+      "role": "Setter",
+      "evidence_quote": "cold",
+      "confidence": 0.99
+    },
+    "expect": {
+      "verdict": "reject",
+      "reason": "evidence_missing_or_too_short"
+    },
+    "why": "a word that happens to appear is not evidence"
+  }
+]

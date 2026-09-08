@@ -1,0 +1,764 @@
+{
+  "name": "WF-2 Dispatch",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 1
+            }
+          ]
+        }
+      },
+      "id": "4f232cd0-9146-587a-9a58-cb0e175280c9",
+      "name": "Every minute",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        -100
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "05cb9690-e89c-5e95-b6e4-ddef8306e286",
+      "name": "Manual",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "89a5b12b-7364-53c4-bfed-24f86b12d7db",
+              "name": "notion_candidates_db",
+              "value": "4046c96105ea4b469edddf3d152cb1b2",
+              "type": "string"
+            },
+            {
+              "id": "2a1763b5-b119-5067-81c0-ebcaed63a938",
+              "name": "notion_recruiters_db",
+              "value": "f515ee08573f4b05bae1d73892278d8f",
+              "type": "string"
+            },
+            {
+              "id": "ed1b0cb7-646a-5894-b450-20067733f914",
+              "name": "notion_events_db",
+              "value": "ec414c5e2999473082f2a0522fe09a89",
+              "type": "string"
+            },
+            {
+              "id": "166b1159-1b18-5d21-bbd1-9b886f229057",
+              "name": "anthropic_model",
+              "value": "claude-haiku-4-5-20251001",
+              "type": "string"
+            },
+            {
+              "id": "3a841922-2198-5bc9-89c9-ccf431109367",
+              "name": "claude_system_prompt",
+              "value": "You classify sales-role applications for a coaching business. Reply with ONLY a JSON object and nothing else - no prose, no code fences. Shape: {\"role\": R, \"evidence_quote\": Q, \"confidence\": C}. R must be exactly one of these four strings: \"Setter\", \"Coach\", \"Closer\", \"Full Cycle\". Q must be ONE clause copied verbatim from the application text that supports R - the single most telling clause, no more than about 15 words. Never quote a whole sentence pair, never quote the whole text. Do not paraphrase, do not fix typos, do not add words. C is a number from 0 to 1 giving your confidence that R is the right role. If the text does not clearly support any of the four roles, pick the closest and set C below 0.5.",
+              "type": "string"
+            },
+            {
+              "id": "21e075b8-53d2-513a-9b4e-c00619c85328",
+              "name": "docusign_base_url",
+              "value": "https://demo.docusign.net/restapi/v2.1",
+              "type": "string"
+            },
+            {
+              "id": "45b59580-0e18-5686-b9e1-2a3375db4d52",
+              "name": "docusign_account_id",
+              "value": "REPLACE_ME",
+              "type": "string"
+            },
+            {
+              "id": "d0995cdd-38a5-5c65-a8a7-26190a5bf7aa",
+              "name": "docusign_role_name",
+              "value": "Signer",
+              "type": "string"
+            },
+            {
+              "id": "fa6c8866-ff58-5ddb-9d32-ef95c490e25f",
+              "name": "template_setter",
+              "value": "REPLACE_ME",
+              "type": "string"
+            },
+            {
+              "id": "6002be7a-63fe-54d9-9dd3-33c29e42c016",
+              "name": "template_coach",
+              "value": "REPLACE_ME",
+              "type": "string"
+            },
+            {
+              "id": "4cfa0c17-e841-561d-9652-2f7c71737782",
+              "name": "template_closer",
+              "value": "REPLACE_ME",
+              "type": "string"
+            },
+            {
+              "id": "65467044-2f03-56f0-8025-e7a3f7047d30",
+              "name": "template_full_cycle",
+              "value": "REPLACE_ME",
+              "type": "string"
+            },
+            {
+              "id": "79c2e7b0-33b7-548d-b484-3f44f0cbd7ad",
+              "name": "xero_tenant_id",
+              "value": "REPLACE_ME",
+              "type": "string"
+            },
+            {
+              "id": "93124b84-d441-5508-a8ed-0b5597bb9526",
+              "name": "xero_fault_domain",
+              "value": "",
+              "type": "string"
+            },
+            {
+              "id": "c258855a-c384-5118-90c6-d9f9a499a40f",
+              "name": "xero_fault_url",
+              "value": "",
+              "type": "string"
+            },
+            {
+              "id": "c8e06bc5-125a-598b-a1f4-dcbf658185f3",
+              "name": "slack_webhook_url",
+              "value": "",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "d3d16b6b-b701-52f4-a7cf-afbcfbe1f699",
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        0
+      ],
+      "notes": "Fill REPLACE_ME values. Identical node in every workflow."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ 'https://api.notion.com/v1/databases/' + $('Config').first().json.notion_candidates_db + '/query' }}",
+        "options": {},
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "notionApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Notion-Version",
+              "value": "2022-06-28"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ page_size: 100, filter: { and: [ { property: 'Status', select: { equals: 'Approved' } }, { property: 'Envelope ID', rich_text: { is_empty: true } } ] } }) }}"
+      },
+      "id": "815dff13-794c-5588-aa02-465b6cdc0aab",
+      "name": "Find approved, unsent",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        440,
+        0
+      ],
+      "credentials": {
+        "notionApi": {
+          "id": "nOFIsA9AWuU2qeLi",
+          "name": "Notion account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "results",
+        "options": {}
+      },
+      "id": "38a2d67b-4802-5a3a-8d47-0ab25eea7937",
+      "name": "Split Out",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        660,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "0ba0f460-b184-52c1-9e91-68b76c0455a7",
+                    "leftValue": "={{ $json.properties && $json.properties.Role && $json.properties.Role.select ? $json.properties.Role.select.name : '' }}",
+                    "rightValue": "Setter",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Setter"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "4dc7f474-aaa3-57d4-91b4-68199117a7f9",
+                    "leftValue": "={{ $json.properties && $json.properties.Role && $json.properties.Role.select ? $json.properties.Role.select.name : '' }}",
+                    "rightValue": "Coach",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Coach"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "0a23f431-411f-5aec-bd3c-37f921c1e37c",
+                    "leftValue": "={{ $json.properties && $json.properties.Role && $json.properties.Role.select ? $json.properties.Role.select.name : '' }}",
+                    "rightValue": "Closer",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Closer"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "3e39da19-b7bc-57d6-ba01-0129c6b9a74c",
+                    "leftValue": "={{ $json.properties && $json.properties.Role && $json.properties.Role.select ? $json.properties.Role.select.name : '' }}",
+                    "rightValue": "Full Cycle",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Full Cycle"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      },
+      "id": "9bc8e9fb-b517-5475-9aa7-e30c52fe9b82",
+      "name": "Switch: role",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        880,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "c1d5dfbc-c33d-534d-98a9-a92f814e936c",
+              "name": "template_id",
+              "value": "={{ $('Config').first().json.template_setter }}",
+              "type": "string"
+            },
+            {
+              "id": "7e475d0b-b3cd-5684-a1dd-59938abfd1f7",
+              "name": "role",
+              "value": "Setter",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "3ef68f15-2471-5af7-a2d8-0a8a1ae3e6eb",
+      "name": "Template: Setter",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1100,
+        -300
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "f7fef74d-29f8-5b91-8e0c-b0f4a30eb370",
+              "name": "template_id",
+              "value": "={{ $('Config').first().json.template_coach }}",
+              "type": "string"
+            },
+            {
+              "id": "0d7ddfb2-4cbe-5737-8f43-4a7118d360da",
+              "name": "role",
+              "value": "Coach",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "b6f0b8c9-82b0-5c6d-9692-a7cea1e8c9b3",
+      "name": "Template: Coach",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1100,
+        -100
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "8da23e79-bdd5-5923-8cce-5152dd0cac28",
+              "name": "template_id",
+              "value": "={{ $('Config').first().json.template_closer }}",
+              "type": "string"
+            },
+            {
+              "id": "7d9073ab-1240-588a-8816-2ba295278af6",
+              "name": "role",
+              "value": "Closer",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "39cd2d2c-39ad-520a-9c7f-6c4a849cd46e",
+      "name": "Template: Closer",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1100,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "f8a22797-3c8c-57be-8fea-5a8c7fc60631",
+              "name": "template_id",
+              "value": "={{ $('Config').first().json.template_full_cycle }}",
+              "type": "string"
+            },
+            {
+              "id": "92985295-5c48-5eea-8ec0-4e5bc2311e1f",
+              "name": "role",
+              "value": "Full Cycle",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "52219439-0c88-5df3-95d5-2208291dee40",
+      "name": "Template: Full Cycle",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1100,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.notion.com/v1/pages",
+        "options": {},
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "notionApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Notion-Version",
+              "value": "2022-06-28"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  parent: { database_id: $('Config').first().json.notion_events_db },\n  properties: {\n    Name: { title: [{ text: { content: String('dispatch skipped').slice(0, 200) } }] },\n    Workflow: { select: { name: 'WF-2 Dispatch' } },\n    Step: { select: { name: 'dispatch-docusign' } },\n    Result: { select: { name: 'rejected' } },\n    Detail: { rich_text: [{ text: { content: String('no template for role ' + JSON.stringify($json.properties && $json.properties.Role)).slice(0, 1900) } }] },\n    Timestamp: { date: { start: $now.toISO() } },\n    'Run ID': { rich_text: [{ text: { content: String($execution.id) } }] },\n    'Envelope ID': { rich_text: [{ text: { content: String('' || '') } }] },\n    Candidate: { relation: ($json.id) ? [{ id: $json.id }] : [] }\n  }\n}) }}"
+      },
+      "id": "76a0eb23-510c-5898-a130-ab71df040503",
+      "name": "Log: no template",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1100,
+        500
+      ],
+      "credentials": {
+        "notionApi": {
+          "id": "nOFIsA9AWuU2qeLi",
+          "name": "Notion account"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "notes": "Logging must never take the pipeline down: continues on error."
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst cfg = $('Config').first().json;\nconst p = $json.properties || {};\nconst rt = (x) => (x && x.rich_text ? x.rich_text.map(t => t.plain_text).join('') : '');\nconst name = p.Name && p.Name.title ? p.Name.title.map(t => t.plain_text).join('') : '';\nconst email = (p.Email && p.Email.email) || rt(p['Email Norm']);\nif (!email) throw new Error('Candidate ' + $json.id + ' has no email; cannot send an envelope');\nif (!$json.template_id || $json.template_id === 'REPLACE_ME') {\n  throw new Error('No DocuSign template configured for role ' + $json.role);\n}\nreturn { json: {\n  page_id: $json.id,\n  name, email,\n  role: $json.role,\n  template_id: $json.template_id,\n  envelope: {\n    templateId: $json.template_id,\n    status: 'sent',\n    templateRoles: [{ email, name, roleName: cfg.docusign_role_name }],\n  },\n} };\n",
+        "mode": "runOnceForEachItem"
+      },
+      "id": "a04b4335-bdb9-5638-9a32-26b83b9b29eb",
+      "name": "Prepare envelope",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Config').first().json.docusign_base_url + '/accounts/' + $('Config').first().json.docusign_account_id + '/envelopes' }}",
+        "options": {},
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.envelope) }}"
+      },
+      "id": "50c2d39f-b5f8-56e8-901c-9276114f0b77",
+      "name": "DocuSign: create envelope",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1540,
+        0
+      ],
+      "credentials": {
+        "oAuth2Api": {
+          "id": "f757f251-308d-58f2-a078-1039c0bbe56f",
+          "name": "DocuSign Sandbox"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ 'https://api.notion.com/v1/pages/' + ($('Prepare envelope').item.json.page_id) }}",
+        "options": {},
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "notionApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Notion-Version",
+              "value": "2022-06-28"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ properties: { 'Envelope ID': { rich_text: [{ text: { content: String($json.envelopeId) } }] }, Status: { select: { name: 'Sent' } } } }) }}"
+      },
+      "id": "9ccf6b92-52c8-5f87-b244-3fc746f4c9ac",
+      "name": "Mark sent",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1760,
+        0
+      ],
+      "credentials": {
+        "notionApi": {
+          "id": "nOFIsA9AWuU2qeLi",
+          "name": "Notion account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.notion.com/v1/pages",
+        "options": {},
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "notionApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Notion-Version",
+              "value": "2022-06-28"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  parent: { database_id: $('Config').first().json.notion_events_db },\n  properties: {\n    Name: { title: [{ text: { content: String('sent ' + $('Prepare envelope').item.json.name).slice(0, 200) } }] },\n    Workflow: { select: { name: 'WF-2 Dispatch' } },\n    Step: { select: { name: 'dispatch-docusign' } },\n    Result: { select: { name: 'ok' } },\n    Detail: { rich_text: [{ text: { content: String('template=' + $('Prepare envelope').item.json.template_id + ' role=' + $('Prepare envelope').item.json.role + ' to=' + $('Prepare envelope').item.json.email).slice(0, 1900) } }] },\n    Timestamp: { date: { start: $now.toISO() } },\n    'Run ID': { rich_text: [{ text: { content: String($execution.id) } }] },\n    'Envelope ID': { rich_text: [{ text: { content: String($('DocuSign: create envelope').item.json.envelopeId || '') } }] },\n    Candidate: { relation: ($('Prepare envelope').item.json.page_id) ? [{ id: $('Prepare envelope').item.json.page_id }] : [] }\n  }\n}) }}"
+      },
+      "id": "af625a74-b6a6-5a89-a7f0-c105e0ec028b",
+      "name": "Log: dispatch",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1980,
+        0
+      ],
+      "credentials": {
+        "notionApi": {
+          "id": "nOFIsA9AWuU2qeLi",
+          "name": "Notion account"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "notes": "Logging must never take the pipeline down: continues on error."
+    }
+  ],
+  "connections": {
+    "Every minute": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "Find approved, unsent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find approved, unsent": {
+      "main": [
+        [
+          {
+            "node": "Split Out",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Out": {
+      "main": [
+        [
+          {
+            "node": "Switch: role",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch: role": {
+      "main": [
+        [
+          {
+            "node": "Template: Setter",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Template: Coach",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Template: Closer",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Template: Full Cycle",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log: no template",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Template: Setter": {
+      "main": [
+        [
+          {
+            "node": "Prepare envelope",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Template: Coach": {
+      "main": [
+        [
+          {
+            "node": "Prepare envelope",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Template: Closer": {
+      "main": [
+        [
+          {
+            "node": "Prepare envelope",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Template: Full Cycle": {
+      "main": [
+        [
+          {
+            "node": "Prepare envelope",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare envelope": {
+      "main": [
+        [
+          {
+            "node": "DocuSign: create envelope",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DocuSign: create envelope": {
+      "main": [
+        [
+          {
+            "node": "Mark sent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark sent": {
+      "main": [
+        [
+          {
+            "node": "Log: dispatch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}

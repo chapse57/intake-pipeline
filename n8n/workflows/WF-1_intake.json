@@ -1,0 +1,922 @@
+{
+  "name": "WF-1 Intake",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "intake",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "3fb20b9c-2f40-5eee-9a5d-214dde2325e9",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "3a0125b7-46f9-5a95-8259-5657aca38a76"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "9d78044e-41d5-577a-b435-59b4790504d6",
+              "name": "notion_candidates_db",
+              "value": "4046c96105ea4b469edddf3d152cb1b2",
+              "type": "string"
+            },
+            {
+              "id": "27bcc860-c64f-55b2-9aad-37a982c2e3fa",
+              "name": "notion_recruiters_db",
+              "value": "f515ee08573f4b05bae1d73892278d8f",
+              "type": "string"
+            },
+            {
+              "id": "b56a5850-0d2d-576d-a66f-f9f8edb5bf71",
+              "name": "notion_events_db",
+              "value": "ec414c5e2999473082f2a0522fe09a89",
+              "type": "string"
+            },
+            {
+              "id": "a0cd1d3a-4c29-578b-a3c8-0c70ddb532d8",
+              "name": "anthropic_model",
+              "value": "claude-haiku-4-5-20251001",
+              "type": "string"
+            },
+            {
+              "id": "659c1492-8c7f-5c94-a641-5781926bca8f",
+              "name": "claude_system_prompt",
+              "value": "You classify sales-role applications for a coaching business. Reply with ONLY a JSON object and nothing else - no prose, no code fences. Shape: {\"role\": R, \"evidence_quote\": Q, \"confidence\": C}. R must be exactly one of these four strings: \"Setter\", \"Coach\", \"Closer\", \"Full Cycle\". Q must be ONE clause copied verbatim from the application text that supports R - the single most telling clause, no more than about 15 words. Never quote a whole sentence pair, never quote the whole text. Do not paraphrase, do not fix typos, do not add words. C is a number from 0 to 1 giving your confidence that R is the right role. If the text does not clearly support any of the four roles, pick the closest and set C below 0.5.",
+              "type": "string"
+            },
+            {
+              "id": "4c3c4b9a-c108-5514-b764-d9c026334686",
+              "name": "docusign_base_url",
+              "value": "https://demo.docusign.net/restapi/v2.1",
+              "type": "string"
+            },
+            {
+              "id": "519d162f-8fef-5746-9872-8942eb2c52cc",
+              "name": "docusign_account_id",
+              "value": "REPLACE_ME",
+              "type": "string"
+            },
+            {
+              "id": "c9e952ba-4992-5861-bb6b-8830dacf7764",
+              "name": "docusign_role_name",
+              "value": "Signer",
+              "type": "string"
+            },
+            {
+              "id": "fb05656a-fafc-54e5-9436-4cbfe47c154d",
+              "name": "template_setter",
+              "value": "REPLACE_ME",
+              "type": "string"
+            },
+            {
+              "id": "dd9b729a-9fa0-5694-a1a5-978e667a810f",
+              "name": "template_coach",
+              "value": "REPLACE_ME",
+              "type": "string"
+            },
+            {
+              "id": "4e5b81ac-0915-5fb7-a8ec-ad882ddc5fd3",
+              "name": "template_closer",
+              "value": "REPLACE_ME",
+              "type": "string"
+            },
+            {
+              "id": "dde67dae-5c14-5ef5-ac6b-9540145f14d8",
+              "name": "template_full_cycle",
+              "value": "REPLACE_ME",
+              "type": "string"
+            },
+            {
+              "id": "b1578678-9226-58fe-b9fd-73490f5a0f83",
+              "name": "xero_tenant_id",
+              "value": "REPLACE_ME",
+              "type": "string"
+            },
+            {
+              "id": "ffc6f93d-3ff8-5807-b162-9d5ec52f0527",
+              "name": "xero_fault_domain",
+              "value": "",
+              "type": "string"
+            },
+            {
+              "id": "0d25d8b3-e7a9-5e8b-8f92-6b5d8f0ff4c5",
+              "name": "xero_fault_url",
+              "value": "",
+              "type": "string"
+            },
+            {
+              "id": "9be29153-66c0-58be-913e-ea158b85e0bd",
+              "name": "slack_webhook_url",
+              "value": "",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "1387e3d5-6a4e-5dd3-9b84-6cde667843d8",
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        0
+      ],
+      "notes": "Fill REPLACE_ME values. Identical node in every workflow."
+    },
+    {
+      "parameters": {
+        "jsCode": "/**\n * normalize.js — WF-1 \"normalize\" + \"dedupe\" nodes.\n *\n * Dual-use: `require()` it from tests, or paste the marked block into an\n * n8n Code node. No dependencies, so the pasted copy behaves identically to\n * the copy the test suite exercises. There is exactly one implementation of\n * these rules and the tests run it, not a Python restatement of it.\n */\n\n\n// Trunk-prefix + country-code table. Deliberately small and explicit:\n// libphonenumber cannot be installed into an n8n Code node, and a short\n// table that fails loudly on an unknown region beats a regex that silently\n// produces a wrong E.164 string.\nconst REGIONS = {\n  US: { cc: '1',   trunk: null }, // NANP has no trunk prefix\n  CA: { cc: '1',   trunk: null },\n  GB: { cc: '44',  trunk: '0' },\n  IE: { cc: '353', trunk: '0' },\n  KR: { cc: '82',  trunk: '0' },\n  JP: { cc: '81',  trunk: '0' },\n  SE: { cc: '46',  trunk: '0' },\n  SG: { cc: '65',  trunk: null },\n  NZ: { cc: '64',  trunk: '0' },\n  NG: { cc: '234', trunk: '0' },\n  CL: { cc: '56',  trunk: '0' },\n  GH: { cc: '233', trunk: '0' },\n};\n\nconst ALLOWED_ROLES = ['Setter', 'Coach', 'Closer', 'Full Cycle'];\n\n/** Lowercase + trim. Nothing else. */\nfunction normalizeEmail(raw) {\n  if (raw == null) return '';\n  return String(raw).trim().toLowerCase();\n}\n\n/**\n * Note on what is NOT done here: Gmail's dot-and-plus aliasing is not\n * collapsed. Treating a.b@gmail.com and ab@gmail.com as the same person is\n * true for Gmail and false for most other hosts, and a dedupe rule that is\n * right only for one provider is a rule that merges two real candidates\n * somewhere else. Case and whitespace are universally safe; aliasing is not.\n */\n\nfunction emailDomain(raw) {\n  const e = normalizeEmail(raw);\n  const at = e.lastIndexOf('@');\n  return at === -1 ? '' : e.slice(at + 1);\n}\n\n/**\n * Convert a phone number to E.164. Returns '' when the input cannot be\n * normalized with confidence — an empty key never matches, so an\n * unparseable number degrades to \"not a duplicate\" rather than to a\n * false merge.\n */\nfunction normalizePhone(raw, defaultRegion) {\n  if (raw == null) return '';\n  const s = String(raw).trim();\n  if (!s) return '';\n\n  const hasPlus = s.startsWith('+') || s.startsWith('00');\n  let digits = s.replace(/\\D/g, '');\n  if (s.startsWith('00')) digits = digits.slice(2);\n\n  if (hasPlus) {\n    return digits.length >= 8 && digits.length <= 15 ? '+' + digits : '';\n  }\n\n  const region = REGIONS[String(defaultRegion || '').toUpperCase()];\n  if (!region) return '';\n\n  if (region.trunk && digits.startsWith(region.trunk)) {\n    digits = digits.slice(region.trunk.length);\n  }\n  const out = region.cc + digits;\n  return out.length >= 8 && out.length <= 15 ? '+' + out : '';\n}\n\n/** Lowercase, strip diacritics and punctuation, collapse whitespace. */\nfunction normalizeName(raw) {\n  if (raw == null) return '';\n  return String(raw)\n    .normalize('NFD')\n    .replace(/[\\u0300-\\u036f]/g, '')\n    .toLowerCase()\n    .replace(/[^a-z0-9\\s]/g, '')\n    .replace(/\\s+/g, ' ')\n    .trim();\n}\n\nfunction levenshtein(a, b) {\n  const m = a.length, n = b.length;\n  if (m === 0) return n;\n  if (n === 0) return m;\n  let prev = new Array(n + 1);\n  for (let j = 0; j <= n; j++) prev[j] = j;\n  for (let i = 1; i <= m; i++) {\n    const cur = new Array(n + 1);\n    cur[0] = i;\n    for (let j = 1; j <= n; j++) {\n      cur[j] = Math.min(\n        prev[j] + 1,\n        cur[j - 1] + 1,\n        prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)\n      );\n    }\n    prev = cur;\n  }\n  return prev[n];\n}\n\n/**\n * Normalized Levenshtein similarity in [0, 1].\n * Chosen over difflib/SequenceMatcher because the number has to mean the\n * same thing in the n8n node and in the test assertions; edit distance is\n * trivially reimplementable and order-independent, gestalt matching is not.\n */\nfunction nameSimilarity(a, b) {\n  const x = normalizeName(a), y = normalizeName(b);\n  if (!x && !y) return 1;\n  if (!x || !y) return 0;\n  if (x === y) return 1;\n  return 1 - levenshtein(x, y) / Math.max(x.length, y.length);\n}\n\n/** Build the stored dedupe keys written to the Candidates row. */\nfunction normalizeSubmission(sub) {\n  const email = normalizeEmail(sub.email);\n  return {\n    name: String(sub.name == null ? '' : sub.name).trim(),\n    email_raw: sub.email,\n    email_norm: email,\n    email_domain: emailDomain(email),\n    phone_raw: sub.phone,\n    phone_e164: normalizePhone(sub.phone, sub.country_hint),\n    application_text: sub.application_text == null ? '' : String(sub.application_text),\n    recruiter_email: normalizeEmail(sub.recruiter_email),\n  };\n}\n\nconst FUZZY_NAME_THRESHOLD = 0.8;\n\n/**\n * Decide what to do with an incoming submission against existing rows.\n *\n *   exact  -> do not create a row; increment Duplicate Attempts on the match\n *   fuzzy  -> create a row with Status=Review and Duplicate Of -> match,\n *             because a same-domain near-name is as often two siblings at one\n *             company as it is one person typed twice. A human decides.\n *   new    -> create a row with Status=New\n *\n * `existing` rows must already carry email_norm / phone_e164 / email_domain.\n */\nfunction classifyDuplicate(incoming, existing) {\n  const inc = normalizeSubmission(incoming);\n\n  for (const row of existing) {\n    if (inc.email_norm && row.email_norm && inc.email_norm === row.email_norm) {\n      return { verdict: 'exact', matchId: row.id, on: 'email',\n               reason: `email_norm == ${inc.email_norm}`, score: 1 };\n    }\n  }\n  for (const row of existing) {\n    if (inc.phone_e164 && row.phone_e164 && inc.phone_e164 === row.phone_e164) {\n      return { verdict: 'exact', matchId: row.id, on: 'phone',\n               reason: `phone_e164 == ${inc.phone_e164}`, score: 1 };\n    }\n  }\n\n  let best = null;\n  for (const row of existing) {\n    if (!inc.email_domain || inc.email_domain !== row.email_domain) continue;\n    const score = nameSimilarity(inc.name, row.name);\n    if (score >= FUZZY_NAME_THRESHOLD && (!best || score > best.score)) {\n      best = { verdict: 'fuzzy', matchId: row.id, on: 'name+domain',\n               reason: `name similarity ${score.toFixed(4)} >= ${FUZZY_NAME_THRESHOLD} on domain ${inc.email_domain}`,\n               score };\n    }\n  }\n  if (best) return best;\n\n  return { verdict: 'new', matchId: null, on: null, reason: 'no match', score: 0 };\n}\n\n// --- n8n wrapper ---\nconst body = $('Webhook').first().json.body || {};\nconst n = normalizeSubmission(body);\nreturn [{ json: Object.assign({ submission_id: body.submission_id || null, raw: body }, n) }];\n"
+      },
+      "id": "fc178202-da60-5829-9f10-dc07422f8b45",
+      "name": "Normalize",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        0
+      ],
+      "notes": "Body generated from n8n/normalize.js. Edit the file, not this node."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.notion.com/v1/pages",
+        "options": {},
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "notionApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Notion-Version",
+              "value": "2022-06-28"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  parent: { database_id: $('Config').first().json.notion_events_db },\n  properties: {\n    Name: { title: [{ text: { content: String('intake ' + $json.name).slice(0, 200) } }] },\n    Workflow: { select: { name: 'WF-1 Intake' } },\n    Step: { select: { name: 'normalize' } },\n    Result: { select: { name: 'ok' } },\n    Detail: { rich_text: [{ text: { content: String('email_norm=' + $json.email_norm + ' phone_e164=' + $json.phone_e164 + ' domain=' + $json.email_domain + ' submission=' + $json.submission_id).slice(0, 1900) } }] },\n    Timestamp: { date: { start: $now.toISO() } },\n    'Run ID': { rich_text: [{ text: { content: String($execution.id) } }] },\n    'Envelope ID': { rich_text: [{ text: { content: String('' || '') } }] },\n    Candidate: { relation: (null) ? [{ id: null }] : [] }\n  }\n}) }}"
+      },
+      "id": "8bcb75f3-7799-575d-b16b-d016076fd2a6",
+      "name": "Log: normalize",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        660,
+        0
+      ],
+      "credentials": {
+        "notionApi": {
+          "id": "nOFIsA9AWuU2qeLi",
+          "name": "Notion account"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "notes": "Logging must never take the pipeline down: continues on error."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ 'https://api.notion.com/v1/databases/' + $('Config').first().json.notion_candidates_db + '/query' }}",
+        "options": {},
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "notionApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Notion-Version",
+              "value": "2022-06-28"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ page_size: 100, filter: { property: 'Email Norm', rich_text: { equals: $('Normalize').first().json.email_norm || '__none__' } } }) }}"
+      },
+      "id": "2bf5e96b-5727-50fc-b2f9-b449e16c2b83",
+      "name": "Find by email",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        880,
+        0
+      ],
+      "credentials": {
+        "notionApi": {
+          "id": "nOFIsA9AWuU2qeLi",
+          "name": "Notion account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ 'https://api.notion.com/v1/databases/' + $('Config').first().json.notion_candidates_db + '/query' }}",
+        "options": {},
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "notionApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Notion-Version",
+              "value": "2022-06-28"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ page_size: 100, filter: { property: 'Phone E164', rich_text: { equals: $('Normalize').first().json.phone_e164 || '__none__' } } }) }}"
+      },
+      "id": "f403a910-bd93-5091-9c5b-da104da98294",
+      "name": "Find by phone",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1100,
+        0
+      ],
+      "credentials": {
+        "notionApi": {
+          "id": "nOFIsA9AWuU2qeLi",
+          "name": "Notion account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ 'https://api.notion.com/v1/databases/' + $('Config').first().json.notion_candidates_db + '/query' }}",
+        "options": {},
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "notionApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Notion-Version",
+              "value": "2022-06-28"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ page_size: 100, filter: { property: 'Email Domain', rich_text: { equals: $('Normalize').first().json.email_domain || '__none__' } } }) }}"
+      },
+      "id": "a773baed-6ed3-5419-a999-d82d9163ce2d",
+      "name": "Find by domain",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1320,
+        0
+      ],
+      "credentials": {
+        "notionApi": {
+          "id": "nOFIsA9AWuU2qeLi",
+          "name": "Notion account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "/**\n * normalize.js — WF-1 \"normalize\" + \"dedupe\" nodes.\n *\n * Dual-use: `require()` it from tests, or paste the marked block into an\n * n8n Code node. No dependencies, so the pasted copy behaves identically to\n * the copy the test suite exercises. There is exactly one implementation of\n * these rules and the tests run it, not a Python restatement of it.\n */\n\n\n// Trunk-prefix + country-code table. Deliberately small and explicit:\n// libphonenumber cannot be installed into an n8n Code node, and a short\n// table that fails loudly on an unknown region beats a regex that silently\n// produces a wrong E.164 string.\nconst REGIONS = {\n  US: { cc: '1',   trunk: null }, // NANP has no trunk prefix\n  CA: { cc: '1',   trunk: null },\n  GB: { cc: '44',  trunk: '0' },\n  IE: { cc: '353', trunk: '0' },\n  KR: { cc: '82',  trunk: '0' },\n  JP: { cc: '81',  trunk: '0' },\n  SE: { cc: '46',  trunk: '0' },\n  SG: { cc: '65',  trunk: null },\n  NZ: { cc: '64',  trunk: '0' },\n  NG: { cc: '234', trunk: '0' },\n  CL: { cc: '56',  trunk: '0' },\n  GH: { cc: '233', trunk: '0' },\n};\n\nconst ALLOWED_ROLES = ['Setter', 'Coach', 'Closer', 'Full Cycle'];\n\n/** Lowercase + trim. Nothing else. */\nfunction normalizeEmail(raw) {\n  if (raw == null) return '';\n  return String(raw).trim().toLowerCase();\n}\n\n/**\n * Note on what is NOT done here: Gmail's dot-and-plus aliasing is not\n * collapsed. Treating a.b@gmail.com and ab@gmail.com as the same person is\n * true for Gmail and false for most other hosts, and a dedupe rule that is\n * right only for one provider is a rule that merges two real candidates\n * somewhere else. Case and whitespace are universally safe; aliasing is not.\n */\n\nfunction emailDomain(raw) {\n  const e = normalizeEmail(raw);\n  const at = e.lastIndexOf('@');\n  return at === -1 ? '' : e.slice(at + 1);\n}\n\n/**\n * Convert a phone number to E.164. Returns '' when the input cannot be\n * normalized with confidence — an empty key never matches, so an\n * unparseable number degrades to \"not a duplicate\" rather than to a\n * false merge.\n */\nfunction normalizePhone(raw, defaultRegion) {\n  if (raw == null) return '';\n  const s = String(raw).trim();\n  if (!s) return '';\n\n  const hasPlus = s.startsWith('+') || s.startsWith('00');\n  let digits = s.replace(/\\D/g, '');\n  if (s.startsWith('00')) digits = digits.slice(2);\n\n  if (hasPlus) {\n    return digits.length >= 8 && digits.length <= 15 ? '+' + digits : '';\n  }\n\n  const region = REGIONS[String(defaultRegion || '').toUpperCase()];\n  if (!region) return '';\n\n  if (region.trunk && digits.startsWith(region.trunk)) {\n    digits = digits.slice(region.trunk.length);\n  }\n  const out = region.cc + digits;\n  return out.length >= 8 && out.length <= 15 ? '+' + out : '';\n}\n\n/** Lowercase, strip diacritics and punctuation, collapse whitespace. */\nfunction normalizeName(raw) {\n  if (raw == null) return '';\n  return String(raw)\n    .normalize('NFD')\n    .replace(/[\\u0300-\\u036f]/g, '')\n    .toLowerCase()\n    .replace(/[^a-z0-9\\s]/g, '')\n    .replace(/\\s+/g, ' ')\n    .trim();\n}\n\nfunction levenshtein(a, b) {\n  const m = a.length, n = b.length;\n  if (m === 0) return n;\n  if (n === 0) return m;\n  let prev = new Array(n + 1);\n  for (let j = 0; j <= n; j++) prev[j] = j;\n  for (let i = 1; i <= m; i++) {\n    const cur = new Array(n + 1);\n    cur[0] = i;\n    for (let j = 1; j <= n; j++) {\n      cur[j] = Math.min(\n        prev[j] + 1,\n        cur[j - 1] + 1,\n        prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)\n      );\n    }\n    prev = cur;\n  }\n  return prev[n];\n}\n\n/**\n * Normalized Levenshtein similarity in [0, 1].\n * Chosen over difflib/SequenceMatcher because the number has to mean the\n * same thing in the n8n node and in the test assertions; edit distance is\n * trivially reimplementable and order-independent, gestalt matching is not.\n */\nfunction nameSimilarity(a, b) {\n  const x = normalizeName(a), y = normalizeName(b);\n  if (!x && !y) return 1;\n  if (!x || !y) return 0;\n  if (x === y) return 1;\n  return 1 - levenshtein(x, y) / Math.max(x.length, y.length);\n}\n\n/** Build the stored dedupe keys written to the Candidates row. */\nfunction normalizeSubmission(sub) {\n  const email = normalizeEmail(sub.email);\n  return {\n    name: String(sub.name == null ? '' : sub.name).trim(),\n    email_raw: sub.email,\n    email_norm: email,\n    email_domain: emailDomain(email),\n    phone_raw: sub.phone,\n    phone_e164: normalizePhone(sub.phone, sub.country_hint),\n    application_text: sub.application_text == null ? '' : String(sub.application_text),\n    recruiter_email: normalizeEmail(sub.recruiter_email),\n  };\n}\n\nconst FUZZY_NAME_THRESHOLD = 0.8;\n\n/**\n * Decide what to do with an incoming submission against existing rows.\n *\n *   exact  -> do not create a row; increment Duplicate Attempts on the match\n *   fuzzy  -> create a row with Status=Review and Duplicate Of -> match,\n *             because a same-domain near-name is as often two siblings at one\n *             company as it is one person typed twice. A human decides.\n *   new    -> create a row with Status=New\n *\n * `existing` rows must already carry email_norm / phone_e164 / email_domain.\n */\nfunction classifyDuplicate(incoming, existing) {\n  const inc = normalizeSubmission(incoming);\n\n  for (const row of existing) {\n    if (inc.email_norm && row.email_norm && inc.email_norm === row.email_norm) {\n      return { verdict: 'exact', matchId: row.id, on: 'email',\n               reason: `email_norm == ${inc.email_norm}`, score: 1 };\n    }\n  }\n  for (const row of existing) {\n    if (inc.phone_e164 && row.phone_e164 && inc.phone_e164 === row.phone_e164) {\n      return { verdict: 'exact', matchId: row.id, on: 'phone',\n               reason: `phone_e164 == ${inc.phone_e164}`, score: 1 };\n    }\n  }\n\n  let best = null;\n  for (const row of existing) {\n    if (!inc.email_domain || inc.email_domain !== row.email_domain) continue;\n    const score = nameSimilarity(inc.name, row.name);\n    if (score >= FUZZY_NAME_THRESHOLD && (!best || score > best.score)) {\n      best = { verdict: 'fuzzy', matchId: row.id, on: 'name+domain',\n               reason: `name similarity ${score.toFixed(4)} >= ${FUZZY_NAME_THRESHOLD} on domain ${inc.email_domain}`,\n               score };\n    }\n  }\n  if (best) return best;\n\n  return { verdict: 'new', matchId: null, on: null, reason: 'no match', score: 0 };\n}\n\n// --- n8n wrapper ---\nconst inc = $('Normalize').first().json;\nconst rt = (x) => (x && x.rich_text ? x.rich_text.map(t => t.plain_text).join('') : '');\nconst seen = new Set();\nconst existing = [];\nfor (const src of ['Find by email', 'Find by phone', 'Find by domain']) {\n  const res = ($(src).first().json || {}).results || [];\n  for (const p of res) {\n    if (seen.has(p.id)) continue;\n    seen.add(p.id);\n    const pr = p.properties || {};\n    existing.push({\n      id: p.id,\n      name: pr.Name && pr.Name.title ? pr.Name.title.map(t => t.plain_text).join('') : '',\n      email_norm: rt(pr['Email Norm']),\n      email_domain: rt(pr['Email Domain']),\n      phone_e164: rt(pr['Phone E164']),\n      duplicate_attempts: (pr['Duplicate Attempts'] && pr['Duplicate Attempts'].number) || 0,\n    });\n  }\n}\nconst v = classifyDuplicate(inc.raw, existing);\nconst matched = existing.find(r => r.id === v.matchId) || null;\nreturn [{ json: Object.assign({}, inc, {\n  verdict: v.verdict,\n  match_id: v.matchId,\n  match_on: v.on,\n  match_reason: v.reason,\n  match_score: v.score,\n  match_attempts: matched ? matched.duplicate_attempts : 0,\n  existing_count: existing.length,\n}) }];\n"
+      },
+      "id": "5e604c25-6c83-5e54-99be-3f25bff037c7",
+      "name": "Classify",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1540,
+        0
+      ],
+      "notes": "Same normalize.js body as the Normalize node; runs classifyDuplicate over the three lookups."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.notion.com/v1/pages",
+        "options": {},
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "notionApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Notion-Version",
+              "value": "2022-06-28"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  parent: { database_id: $('Config').first().json.notion_events_db },\n  properties: {\n    Name: { title: [{ text: { content: String('dedupe ' + $json.name + ' -> ' + $json.verdict).slice(0, 200) } }] },\n    Workflow: { select: { name: 'WF-1 Intake' } },\n    Step: { select: { name: 'dedupe' } },\n    Result: { select: { name: $json.verdict === 'exact' ? 'rejected' : 'ok' } },\n    Detail: { rich_text: [{ text: { content: String($json.verdict + ' | ' + $json.match_reason + ' | recruiter=' + $json.recruiter_email + ' | submission=' + $json.submission_id + ' | compared=' + $json.existing_count).slice(0, 1900) } }] },\n    Timestamp: { date: { start: $now.toISO() } },\n    'Run ID': { rich_text: [{ text: { content: String($execution.id) } }] },\n    'Envelope ID': { rich_text: [{ text: { content: String('' || '') } }] },\n    Candidate: { relation: ($('Classify').first().json.match_id) ? [{ id: $('Classify').first().json.match_id }] : [] }\n  }\n}) }}"
+      },
+      "id": "8e231c98-da36-5256-8595-31a8c80fcaf0",
+      "name": "Log: dedupe",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1760,
+        0
+      ],
+      "credentials": {
+        "notionApi": {
+          "id": "nOFIsA9AWuU2qeLi",
+          "name": "Notion account"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "notes": "Logging must never take the pipeline down: continues on error."
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "90fae5c1-ec5f-56ec-9b2d-c2375157e1ac",
+                    "leftValue": "={{ $('Classify').first().json.verdict }}",
+                    "rightValue": "exact",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "exact"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "c1189166-747b-52ae-b033-c6f9fc01f210",
+                    "leftValue": "={{ $('Classify').first().json.verdict }}",
+                    "rightValue": "fuzzy",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "fuzzy"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "2d5164c2-5031-583c-a397-0b8ba727596c",
+                    "leftValue": "={{ $('Classify').first().json.verdict }}",
+                    "rightValue": "new",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "new"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "061a3772-577b-5a25-ac45-1c82b96d9cdf",
+      "name": "Route",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        1980,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ 'https://api.notion.com/v1/pages/' + ($('Classify').first().json.match_id) }}",
+        "options": {},
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "notionApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Notion-Version",
+              "value": "2022-06-28"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ properties: { 'Duplicate Attempts': { number: ($('Classify').first().json.match_attempts || 0) + 1 } } }) }}"
+      },
+      "id": "966e8656-6e0e-525b-9e1c-60b5a370d043",
+      "name": "Bump Duplicate Attempts",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2200,
+        -200
+      ],
+      "credentials": {
+        "notionApi": {
+          "id": "nOFIsA9AWuU2qeLi",
+          "name": "Notion account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "options": {},
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "anthropicApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  model: $('Config').first().json.anthropic_model,\n  max_tokens: 300,\n  system: $('Config').first().json.claude_system_prompt,\n  messages: [\n    { role: 'user', content: 'APPLICATION TEXT:\\n' + $('Classify').first().json.application_text },\n    { role: 'assistant', content: '{' }\n  ]\n}) }}"
+      },
+      "id": "978af501-47be-51fb-92a7-42244621a1e6",
+      "name": "Claude: propose role",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2200,
+        100
+      ],
+      "credentials": {
+        "anthropicApi": {
+          "id": "85ea52a9-01a4-5b8b-ae4d-879d15180cb9",
+          "name": "Anthropic account"
+        }
+      },
+      "notes": "Assistant turn is prefilled with '{' so the reply is the JSON body, not prose or a fence. Output is untrusted until the Guard node has looked at it."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.notion.com/v1/pages",
+        "options": {},
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "notionApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Notion-Version",
+              "value": "2022-06-28"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  parent: { database_id: $('Config').first().json.notion_events_db },\n  properties: {\n    Name: { title: [{ text: { content: String('llm ' + $('Classify').first().json.name).slice(0, 200) } }] },\n    Workflow: { select: { name: 'WF-1 Intake' } },\n    Step: { select: { name: 'llm-role' } },\n    Result: { select: { name: 'ok' } },\n    Detail: { rich_text: [{ text: { content: String((($json.content || []).map(b => b.text || '').join('')) + ' | model=' + ($json.model || '') + ' | in=' + (($json.usage || {}).input_tokens || 0) + ' out=' + (($json.usage || {}).output_tokens || 0)).slice(0, 1900) } }] },\n    Timestamp: { date: { start: $now.toISO() } },\n    'Run ID': { rich_text: [{ text: { content: String($execution.id) } }] },\n    'Envelope ID': { rich_text: [{ text: { content: String('' || '') } }] },\n    Candidate: { relation: (null) ? [{ id: null }] : [] }\n  }\n}) }}"
+      },
+      "id": "91cfce04-9c1d-556d-a280-9d1c2b46dc02",
+      "name": "Log: llm-role",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2420,
+        100
+      ],
+      "credentials": {
+        "notionApi": {
+          "id": "nOFIsA9AWuU2qeLi",
+          "name": "Notion account"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "notes": "Logging must never take the pipeline down: continues on error."
+    },
+    {
+      "parameters": {
+        "jsCode": "/**\n * guard.js — WF-1 \"guard\" node. The deterministic check that stands between\n * the model's proposal and the Notion write.\n *\n * The model is asked for {role, evidence_quote, confidence}. Nothing it\n * returns is trusted: the role must be one of four strings, the quote must\n * actually occur in the application text, and the confidence must be a real\n * number in range. A rejected proposal is logged with its reason and the\n * candidate is left for a human — it is never written through with a\n * \"best guess\" role.\n *\n * Self-contained on purpose: an n8n Code node cannot `require` a sibling\n * file, so the copy pasted into n8n is byte-identical to the copy the tests\n * run. Dual-use like normalize.js.\n */\n\n\nconst ALLOWED_ROLES = ['Setter', 'Coach', 'Closer', 'Full Cycle'];\nconst CONFIDENCE_FLOOR = 0.7;\nconst MIN_EVIDENCE_CHARS = 12;\n\n// Upper bound on the quote. Without one, \"is the quote in the source?\" is\n// vacuous: a model that quotes the whole application always passes. The\n// first live call did exactly that — two of four sentences, 85% of the text.\n// A quote has to be a part that points at the role, not the document.\nconst MAX_EVIDENCE_CHARS = 300;\nconst MAX_EVIDENCE_RATIO = 0.4;   // of the folded source length\nconst RATIO_APPLIES_FROM = 100;   // sources shorter than this only get the char cap\n\n/**\n * Fold the text just enough that quoting is robust to formatting but not so\n * much that a different sentence starts matching. Case, whitespace runs, and\n * the typographic variants word processors substitute are folded; word order\n * and word choice are not.\n */\nfunction foldForQuote(s) {\n  return String(s == null ? '' : s)\n    .normalize('NFKC')\n    .replace(/[‘’ʼ]/g, \"'\")\n    .replace(/[“”]/g, '\"')\n    .replace(/[‐-―]/g, '-')\n    .replace(/\\s+/g, ' ')\n    .trim()\n    .toLowerCase();\n}\n\nfunction quoteFoundIn(quote, source) {\n  const q = foldForQuote(quote);\n  const s = foldForQuote(source);\n  if (!q) return false;\n  return s.indexOf(q) !== -1;\n}\n\nfunction reject(reason, detail) {\n  return { verdict: 'reject', role: null, evidence: null, confidence: null,\n           reason, detail: detail === undefined ? null : detail };\n}\n\n/**\n * @param {object|string} llmOutput  parsed object, or the raw model string\n * @param {string} applicationText   the source the quote must come from\n * @returns {{verdict:'accept'|'review'|'reject', role, evidence, confidence,\n *            reason, detail}}\n */\nfunction guard(llmOutput, applicationText) {\n  // --- structure ---\n  let out = llmOutput;\n  if (typeof out === 'string') {\n    try {\n      out = JSON.parse(out);\n    } catch (e) {\n      return reject('not_json', String(out).slice(0, 200));\n    }\n  }\n  if (out === null || typeof out !== 'object' || Array.isArray(out)) {\n    return reject('not_an_object', typeof out);\n  }\n\n  const { role, evidence_quote: evidence, confidence } = out;\n\n  // --- role must be one of four exact strings ---\n  // No trimming, no case-folding, no \"Closer \" and no \"closer\". The prompt\n  // states the four literals; anything else means the model improvised, and\n  // silently repairing it would hide exactly the failure this node exists\n  // to catch.\n  if (typeof role !== 'string' || ALLOWED_ROLES.indexOf(role) === -1) {\n    return reject('role_not_allowed', role === undefined ? null : role);\n  }\n\n  // --- evidence must be a real quote from the source ---\n  if (typeof evidence !== 'string' || foldForQuote(evidence).length < MIN_EVIDENCE_CHARS) {\n    return reject('evidence_missing_or_too_short',\n                  evidence === undefined ? null : String(evidence).slice(0, 200));\n  }\n  const qLen = foldForQuote(evidence).length;\n  const sLen = foldForQuote(applicationText).length;\n  const ratio = sLen ? qLen / sLen : null;\n  if (qLen > MAX_EVIDENCE_CHARS ||\n      (sLen >= RATIO_APPLIES_FROM && qLen > MAX_EVIDENCE_RATIO * sLen)) {\n    return reject('evidence_too_long',\n                  { chars: qLen, ratio: ratio === null ? null : Math.round(ratio * 100) / 100 });\n  }\n  if (!quoteFoundIn(evidence, applicationText)) {\n    return reject('evidence_not_in_source', String(evidence).slice(0, 200));\n  }\n\n  // --- confidence must be a usable number ---\n  if (typeof confidence !== 'number' || !isFinite(confidence)) {\n    return reject('confidence_not_a_number',\n                  confidence === undefined ? null : String(confidence));\n  }\n  if (confidence < 0 || confidence > 1) {\n    return reject('confidence_out_of_range', confidence);\n  }\n\n  // --- everything structural passed; only now does confidence route ---\n  if (confidence < CONFIDENCE_FLOOR) {\n    return { verdict: 'review', role, evidence, confidence,\n             reason: 'below_confidence_floor', detail: CONFIDENCE_FLOOR };\n  }\n\n  return { verdict: 'accept', role, evidence, confidence,\n           reason: 'ok', detail: null };\n}\n\n// --- n8n wrapper ---\nconst c = $('Classify').first().json;\nconst resp = $('Claude: propose role').first().json || {};\nlet raw = '';\ntry { raw = (resp.content || []).map(b => b.text || '').join(''); } catch (e) { raw = ''; }\nraw = raw.trim();\n// The request prefilled the assistant turn with '{'; the reply is the rest.\nlet text = raw.startsWith('{') ? raw : '{' + raw;\n// Fallback only. With the prefill a fence cannot come first; if one still\n// appears, it is stripped and the fact is logged - a repair that leaves no\n// trace is the thing this node exists to prevent.\nconst stripped = text.replace(/^```(?:json)?\\s*/i, '').replace(/\\s*```$/, '');\nconst fence_stripped = stripped !== text;\ntext = stripped;\nconst r = guard(text, c.application_text);\nreturn [{ json: Object.assign({}, c, { llm_raw: raw, llm_fence_stripped: fence_stripped, guard: r }) }];\n"
+      },
+      "id": "470771ec-7afd-530b-a436-858b718a73d8",
+      "name": "Guard",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2640,
+        100
+      ],
+      "notes": "Body generated from n8n/guard.js. Edit the file, not this node."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.notion.com/v1/pages",
+        "options": {},
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "notionApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Notion-Version",
+              "value": "2022-06-28"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  parent: { database_id: $('Config').first().json.notion_events_db },\n  properties: {\n    Name: { title: [{ text: { content: String('guard ' + $json.name + ' -> ' + $json.guard.verdict).slice(0, 200) } }] },\n    Workflow: { select: { name: 'WF-1 Intake' } },\n    Step: { select: { name: 'guard' } },\n    Result: { select: { name: $json.guard.verdict === 'reject' ? 'rejected' : 'ok' } },\n    Detail: { rich_text: [{ text: { content: String($json.guard.verdict + ' | ' + $json.guard.reason + ($json.guard.detail !== null && $json.guard.detail !== undefined ? ' | ' + JSON.stringify($json.guard.detail) : '') + ' | role=' + $json.guard.role + ' conf=' + $json.guard.confidence + ' | fence_stripped=' + $json.llm_fence_stripped).slice(0, 1900) } }] },\n    Timestamp: { date: { start: $now.toISO() } },\n    'Run ID': { rich_text: [{ text: { content: String($execution.id) } }] },\n    'Envelope ID': { rich_text: [{ text: { content: String('' || '') } }] },\n    Candidate: { relation: (null) ? [{ id: null }] : [] }\n  }\n}) }}"
+      },
+      "id": "72d87726-9990-58fc-aa1a-f2f08e74e2c9",
+      "name": "Log: guard",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2860,
+        100
+      ],
+      "credentials": {
+        "notionApi": {
+          "id": "nOFIsA9AWuU2qeLi",
+          "name": "Notion account"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "notes": "Logging must never take the pipeline down: continues on error."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ 'https://api.notion.com/v1/databases/' + $('Config').first().json.notion_recruiters_db + '/query' }}",
+        "options": {},
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "notionApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Notion-Version",
+              "value": "2022-06-28"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ page_size: 100, filter: { property: 'Email', email: { equals: $('Guard').first().json.recruiter_email || '__none__' } } }) }}"
+      },
+      "id": "d076c96a-db6b-5dd3-b715-d0a9a54c542f",
+      "name": "Find recruiter",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3080,
+        100
+      ],
+      "credentials": {
+        "notionApi": {
+          "id": "nOFIsA9AWuU2qeLi",
+          "name": "Notion account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst g = $('Guard').first().json;\nconst rec = (($('Find recruiter').first().json || {}).results || [])[0] || null;\nconst cfg = $('Config').first().json;\nconst rt = (s) => ({ rich_text: [{ text: { content: String(s == null ? '' : s).slice(0, 1900) } }] });\n// Review whenever a human has to look: fuzzy duplicate, low confidence, or a\n// proposal the guard threw out. Only a clean accept on a clean dedupe is New.\nconst status = (g.verdict === 'fuzzy' || g.guard.verdict !== 'accept') ? 'Review' : 'New';\nconst properties = {\n  Name: { title: [{ text: { content: g.name || g.email_norm || 'unnamed' } }] },\n  Email: { email: g.email_norm || null },\n  Phone: { phone_number: g.phone_raw ? String(g.phone_raw) : null },\n  'Email Norm': rt(g.email_norm),\n  'Phone E164': rt(g.phone_e164),\n  'Email Domain': rt(g.email_domain),\n  'Application Text': rt(g.application_text),\n  Role: g.guard.role ? { select: { name: g.guard.role } } : { select: null },\n  'Role Evidence': rt(g.guard.evidence),\n  'Role Confidence': { number: typeof g.guard.confidence === 'number' ? g.guard.confidence : null },\n  Status: { select: { name: status } },\n  Recruiter: { relation: rec ? [{ id: rec.id }] : [] },\n  'Duplicate Of': { relation: g.verdict === 'fuzzy' && g.match_id ? [{ id: g.match_id }] : [] },\n  'Duplicate Attempts': { number: 0 },\n};\nreturn [{ json: {\n  status,\n  recruiter_found: !!rec,\n  payload: { parent: { database_id: cfg.notion_candidates_db }, properties },\n} }];\n"
+      },
+      "id": "3c828c31-dfe4-50f8-a80a-35bcb7255a28",
+      "name": "Build candidate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3300,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.notion.com/v1/pages",
+        "options": {},
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "notionApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Notion-Version",
+              "value": "2022-06-28"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.payload) }}"
+      },
+      "id": "1cb4ceb2-caa4-51b6-9157-5454ff30c136",
+      "name": "Create candidate",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3520,
+        100
+      ],
+      "credentials": {
+        "notionApi": {
+          "id": "nOFIsA9AWuU2qeLi",
+          "name": "Notion account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.notion.com/v1/pages",
+        "options": {},
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "notionApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Notion-Version",
+              "value": "2022-06-28"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  parent: { database_id: $('Config').first().json.notion_events_db },\n  properties: {\n    Name: { title: [{ text: { content: String('created ' + $('Guard').first().json.name).slice(0, 200) } }] },\n    Workflow: { select: { name: 'WF-1 Intake' } },\n    Step: { select: { name: 'notion-create' } },\n    Result: { select: { name: 'ok' } },\n    Detail: { rich_text: [{ text: { content: String('status=' + $('Build candidate').first().json.status + ' role=' + $('Guard').first().json.guard.role + ' conf=' + $('Guard').first().json.guard.confidence + ' recruiter_found=' + $('Build candidate').first().json.recruiter_found + ' dedupe=' + $('Guard').first().json.verdict + ' guard=' + $('Guard').first().json.guard.verdict + '/' + $('Guard').first().json.guard.reason).slice(0, 1900) } }] },\n    Timestamp: { date: { start: $now.toISO() } },\n    'Run ID': { rich_text: [{ text: { content: String($execution.id) } }] },\n    'Envelope ID': { rich_text: [{ text: { content: String('' || '') } }] },\n    Candidate: { relation: ($('Create candidate').first().json.id) ? [{ id: $('Create candidate').first().json.id }] : [] }\n  }\n}) }}"
+      },
+      "id": "d5392941-3558-50f5-acfd-54e457f281c5",
+      "name": "Log: notion-create",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3740,
+        100
+      ],
+      "credentials": {
+        "notionApi": {
+          "id": "nOFIsA9AWuU2qeLi",
+          "name": "Notion account"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "notes": "Logging must never take the pipeline down: continues on error."
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "Normalize",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize": {
+      "main": [
+        [
+          {
+            "node": "Log: normalize",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log: normalize": {
+      "main": [
+        [
+          {
+            "node": "Find by email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find by email": {
+      "main": [
+        [
+          {
+            "node": "Find by phone",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find by phone": {
+      "main": [
+        [
+          {
+            "node": "Find by domain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find by domain": {
+      "main": [
+        [
+          {
+            "node": "Classify",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Classify": {
+      "main": [
+        [
+          {
+            "node": "Log: dedupe",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log: dedupe": {
+      "main": [
+        [
+          {
+            "node": "Route",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route": {
+      "main": [
+        [
+          {
+            "node": "Bump Duplicate Attempts",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Claude: propose role",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Claude: propose role",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude: propose role": {
+      "main": [
+        [
+          {
+            "node": "Log: llm-role",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log: llm-role": {
+      "main": [
+        [
+          {
+            "node": "Guard",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guard": {
+      "main": [
+        [
+          {
+            "node": "Log: guard",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log: guard": {
+      "main": [
+        [
+          {
+            "node": "Find recruiter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find recruiter": {
+      "main": [
+        [
+          {
+            "node": "Build candidate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build candidate": {
+      "main": [
+        [
+          {
+            "node": "Create candidate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create candidate": {
+      "main": [
+        [
+          {
+            "node": "Log: notion-create",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}

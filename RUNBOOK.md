@@ -24,7 +24,7 @@ against it:
 
 *T9 — idempotency.* Marcus Webb was given `Envelope ID = ENV-T9-DEMO-0001` and
 the completion webhook was posted twice. The first run created the Xero contact
-`c5a31759-8c97-4a66-ae3f-08c67fdd997c`; the second stopped at
+`c5a31759-…`; the second stopped at
 `idempotency / skipped` — "already produced a Xero contact; replay ignored" —
 without calling Xero at all. Xero's contact list shows one Marcus Webb.
 
@@ -43,8 +43,40 @@ His `Xero Contact ID` stayed empty and his Status never became `Onboarded` — a
 failed run leaves no half-written state. The seam was switched back off
 afterwards; both `xero_fault_*` Config values are blank again.
 
-WF-2 (DocuSign) is imported and structurally tested but has never run: it needs
-a DocuSign sandbox and four templates that do not exist yet.
+**WF-2 has since run against a DocuSign developer sandbox, and T8 closed the
+chain.** Four templates were created by API from `docusign/contracts/*.pdf`,
+each with `signHere`, `dateSigned` and `fullName` tabs anchored to `/sig1/`,
+`/dt1/` and `/nm1/`; the creating workflow read all four back and confirmed one
+of each tab per template before the ids were written into `Config`.
+
+Priya Raghunathan was then set to `Approved`. WF-2 picked her up on its
+`Status = Approved AND Envelope ID is empty` query, took the Closer branch from
+her role, and created envelope `10542476-e6e8-847d-81a0-07da059d08e9`, moving
+her to `Sent`. The envelope was signed in DocuSign. DocuSign Connect
+(configuration `n8n WF-3 completion`, REST v2.1, SIM, `envelope-completed`
+only) then called `/webhook/docusign-complete`; n8n run 42 shows `mode:
+webhook`, which is what distinguishes this from the T9 and T10 posts. WF-3
+created Xero contact `d4441ca3-…` and moved her to
+`Onboarded`.
+
+**The chain was then run a second time, on camera.** Daniel Okafor (Coach) was
+approved, WF-2 sent envelope `7e9b2813-04eb-8f79-8024-3796459c08bd` from the
+Coach template, the envelope was signed, and n8n run 44 — `mode: webhook`
+again — created Xero contact `6c9ef4a4-…`. That run
+is the 30-second video: Notion `Sent` → sign → a new WF-3 row appearing on its
+own → Notion `Onboarded` → the contact in Xero. All four templates except
+Setter and Full Cycle have now sent a real envelope.
+
+In the n8n executions list the manual runs carry a small flask icon and the
+webhook-triggered ones do not. That icon is the cheapest available proof that
+the WF-3 runs were not started by hand, and it is visible in the video.
+
+Two honest notes on the first run. Her `Email` was changed from the fixture address
+to a plus-aliased mailbox the operator controls, because an envelope has to
+reach someone who can sign it; `Email Norm` was changed with it so the row is
+not internally inconsistent. And the signer was the operator, not a candidate —
+what the run proves is that the workflow sent the envelope and that the
+signature carried the record into Xero without a hand-fired webhook.
 
 ## Where the live values live
 
@@ -101,6 +133,8 @@ URL plus the state to put it in first.
 | 7 | T9 — one envelope, one contact | [Events](https://www.notion.so/ec414c5e2999473082f2a0522fe09a89) | Top three rows: `idempotency`, `xero-contact`, `docusign-webhook` |
 | 8 | T9 — Xero's side | Xero → Contacts | The All tab, not Suppliers |
 | 9 | T10 — three attempts then an alert | Events | Top five rows of the Tomás Herrera run |
+| 10 | The envelope, completed | DocuSign → Agreements → the envelope's detail page | Better than the list view: status, recipient, signing time and the template's document name are all in one frame |
+| 11 | The signed contract | The document thumbnail on that page | Crop below the `Printed name` line — a Windows activation watermark sits under the footer and will otherwise be the first thing a reviewer notices |
 
 **Shot 1 needs the view tidied first.** The Candidates table has 20
 properties, so Name and Role cannot be on screen at the same time. In Notion:
@@ -122,7 +156,7 @@ again.
 
 Order that reads well without narration:
 
-1. Terminal: `pytest -m offline -v` scrolling to `72 passed`
+1. Terminal: `pytest -m offline -v` scrolling to `80 passed`
 2. n8n WF-1 canvas, then hit the webhook (curl or Postman) with two
    candidates — one new, one a case-changed duplicate of it
 3. n8n execution list: two green runs

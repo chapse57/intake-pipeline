@@ -2,3 +2,11 @@
 __pycache__/
 .pytest_cache/
 node_modules/
+
+# generated scaffolding: docusign/build_template_workflow.py rebuilds it,
+# and it is meant to be deleted from n8n once the template ids are recorded
+n8n/workflows/TEMP_*.json
+
+# portfolio screenshots: they contain a real mailbox and demo record ids,
+# and a public repo is grep-able in a way an Upwork image is not
+upwork-assets/

@@ -1,11 +1,11 @@
 # Intake Pipeline
 
 Recruiting intake on n8n: webhook → normalize → duplicate check → Claude
-proposes a role → deterministic guard → Notion → Xero, with every step logged
-to an append-only Events table.
+proposes a role → deterministic guard → Notion → DocuSign → Xero, with every
+step logged to an append-only Events table.
 
 Everything here is checkable. The workflows are exported as importable JSON,
-the JavaScript in this repo *is* the JavaScript the n8n Code nodes run, and 72
+the JavaScript in this repo *is* the JavaScript the n8n Code nodes run, and 80
 tests exercise it with no credentials and no network.
 
 ## What has actually run
@@ -13,9 +13,15 @@ tests exercise it with no credentials and no network.
 | | Status |
 |---|---|
 | WF-1 intake — dedupe, Claude, guard, Notion | **live**; 20 submissions → 14 created, 6 flagged, 0 lost |
-| WF-3 completion — idempotency, retry, alert | **live** against a real Xero organisation |
+| WF-2 dispatch — DocuSign templates | **live**; envelope sent from the Closer template and signed |
+| WF-3 completion — idempotency, retry, alert row | **live** against a real Xero organisation |
 | WF-0 error handler | **live**; it caught a real credential failure during setup |
-| WF-2 dispatch — DocuSign templates | built and structurally tested, **never run** (no sandbox yet) |
+
+The four steps have also run as one chain, which is a different claim: a
+submission was posted to the webhook, deduped, labelled, guarded and written
+to Notion; approving it sent a real DocuSign envelope; signing that envelope
+made DocuSign Connect call WF-3; and WF-3 created the supplier contact in
+Xero. No step was simulated and no webhook was fired by hand.
 
 `RUNBOOK.md` has the reproduction steps and what was measured. `PORTFOLIO.md`
 has the write-up and, more usefully, the list of claims that would be
@@ -36,6 +42,12 @@ n8n/
     WF-1_intake.json          webhook → normalize → 3 lookups → classify → Claude → guard → Notion
     WF-2_dispatch.json        poll Approved+unsent → Switch(role) → DocuSign → mark Sent
     WF-3_complete.json        DocuSign webhook → idempotency → Xero (explicit 3× retry) → Onboarded
+docusign/
+  build_contracts.py        generates the four role contracts as PDFs
+  contracts/*.pdf           Setter / Coach / Closer / Full Cycle, one page each
+  build_template_workflow.py  emits a throwaway n8n workflow that creates the
+                            four DocuSign templates from those PDFs and then
+                            reads the tabs back to prove the anchors landed
 tests/                T1–T12 plus structural checks on the workflow files
 ```
 
@@ -44,7 +56,7 @@ tests/                T1–T12 plus structural checks on the workflow files
 ```bash
 pip install -r requirements.txt
 
-# offline: no credentials, no network. 72 assertions.
+# offline: no credentials, no network. 80 assertions.
 pytest -m offline
 
 # integration: needs a running n8n and the Notion databases
@@ -65,7 +77,7 @@ rather than failing, so `pytest` on a clean checkout is green.
    |---|---|
    | `Notion Intake` | Notion API |
    | `Anthropic Intake` | Anthropic |
-   | `DocuSign Sandbox` | OAuth2 API (generic; authorization-code against `account-d.docusign.com`) |
+   | `DocuSign Sandbox` | OAuth2 API (generic; authorization-code against `account-d.docusign.com`, scope `signature`, client auth in the header) |
    | `Xero Demo` | Xero OAuth2 API |
 
 2. Import `WF-0` first, then `WF-1`, `WF-2`, `WF-3`. In each of the three
@@ -110,6 +122,52 @@ await fetch('/rest/workflows/' + id, {
 The credential id is on its Details tab in n8n. Reload the editor afterwards;
 the warning triangles are gone.
 
+**Register n8n's redirect URI, not your instance's.** On n8n Cloud the OAuth
+callback is a shared proxy — `https://oauth.n8n.cloud/oauth2/callback` — not
+`https://<your-instance>/rest/oauth2-credential/callback`. The credential
+screen prints the right one; copy it from there into the DocuSign app's
+Redirect URIs. Getting this wrong does not produce a useful error: DocuSign
+drops you on its own console home, as if you had merely logged in.
+
+**A redirect URI takes a minute to reach DocuSign's auth server.** Immediately
+after saving, `/oauth/auth` still answers *"The redirect URI is not registered
+properly with Docusign"* for the URI you just registered. Wait and retry
+before going looking for a mistake that is not there.
+
+## The DocuSign templates
+
+WF-2 sends an envelope from one of four templates chosen by role. The
+templates are created by API rather than in the template builder, from
+`docusign/`:
+
+```bash
+python3 docusign/build_contracts.py          # four one-page PDFs
+python3 docusign/build_template_workflow.py  # a throwaway n8n workflow
+```
+
+Import that workflow, bind the DocuSign credential, run it once, copy the four
+ids out of the final node into `Config`, and delete it. It reads the account
+id from `/oauth/userinfo` rather than assuming one, because a demo account is
+not always on `demo.docusign.net`.
+
+**Signature fields are anchored to text, not to coordinates.** Each contract
+carries `/sig1/`, `/dt1/` and `/nm1/` drawn in white; DocuSign finds them by
+string match and places the tab there. Reword a contract, regenerate, recreate
+the templates, and the fields still land beside the signature rule. Positioned
+tabs would have to be re-measured every time the text reflows.
+
+**Creation returns 201 whether or not the anchors were found.** An unplaced
+tab is kept silently and only surfaces later as an envelope with nowhere to
+sign. So the workflow reads each template back and fails loudly unless all
+three tabs exist with the expected `anchorString`.
+
+**Tabs are not in the template's `recipients` node.** `GET /templates/{id}`
+with `include=recipients` returns the signer — `roleName`, `recipientId`,
+routing — and no tabs at all. The tabs are behind
+`GET /templates/{id}/recipients?include_tabs=true`. The first version of the
+verification asked the wrong endpoint and reported four templates as broken
+when all four were fine; the check was rewritten rather than relaxed.
+
 Do not edit the `Normalize`, `Classify` or `Guard` Code nodes inside n8n.
 They are generated from `normalize.js` / `guard.js`; edit the file, run
 `python3 n8n/build_workflows.py`, re-import. A test fails if the export falls
@@ -141,6 +199,12 @@ Node-level retry is invisible; it produces one error after N silent attempts.
 The loop writes an Events row per attempt, so "retries 3× then alerts" is a
 claim you can verify by reading the log, which is the whole point of the log.
 
+**The alert goes to the log, not to a channel.** `slack_webhook_url` is blank
+in `Config`, and the Slack node continues on error, so the alert exists as an
+Events row and nothing is delivered anywhere. Fill that one value to turn the
+notification on. Until you do, say "writes an alert row" — a claim about a
+delivered alert is disprovable in about ten seconds.
+
 **Every branch ends in a log node, including the ones that stop.** A rejected
 guard verdict, an unknown envelope, a replayed webhook — each writes its
 Events row and then ends at a node that does nothing. There is no path
@@ -168,6 +232,17 @@ All 20 rows of `data/candidates.csv` were replayed against the deployed WF-1:
 20 submitted -> 14 created (13 New, 1 Review), 6 flagged, 0 lost
 ```
 
+Later the same day, one of those 14 was carried the rest of the way. Priya
+Raghunathan was set to `Approved`; WF-2 picked her up on its filtered query,
+chose the Closer template from her role, and sent envelope
+`10542476-…`, moving her to `Sent`. The envelope was signed in DocuSign.
+DocuSign Connect then called `/webhook/docusign-complete`, which is visible in
+n8n as a WF-3 execution with `mode: webhook` — no hand-fired request — and
+WF-3 created her contact in Xero and moved her to `Onboarded`.
+
+That is the T8 case, and it is also the only run in which every stage was
+triggered by the stage before it.
+
 See `RUNBOOK.md` for how to reproduce it, what still needs credentials, and
 what has to be captured by hand.
 
@@ -182,9 +257,9 @@ what has to be captured by hand.
 | T5 | Model returns a role outside the allowed four → reject | offline | `test_guard.py` |
 | T6 | Quote not found in the application text → reject | offline | `test_guard.py` |
 | T7 | Confidence below 0.7 → Review | offline | `test_guard.py` |
-| T8 | Approved candidate gets the role-specific template | live | `test_dispatch.py` |
+| T8 | Approved candidate gets the role-specific template, and the signed envelope carries the chain to Xero | live | `test_dispatch.py` |
 | T9 | Completion webhook delivered twice → one Xero contact | live | `test_dispatch.py` |
-| T10 | Xero 5xx → retries, alerts, writes nothing | live | `test_dispatch.py` |
+| T10 | Xero 5xx → retries, writes an alert row, writes nothing to Xero | live | `test_dispatch.py` |
 | T11 | Second recruiter re-submits → attribution does not move | live | `test_dedupe.py` |
 | T12 | Batch of 20 with 6 planted duplicates | live | `test_batch.py` |
 
@@ -198,7 +273,7 @@ wrong answer. Current output:
 
 ```
 candidates.csv : 20 submissions -> 14 created (1 of them Review), 6 flagged, 0 lost
-guard_cases.json : 13 cases
+guard_cases.json : 16 cases
 ```
 
 **Three of the twenty exist to prove the rules do not over-match.** A dedupe

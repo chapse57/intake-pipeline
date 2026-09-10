@@ -32,35 +32,41 @@ step_group() {
 
 step_server() {
   # Burstable B1ms, 32 GiB (the minimum), PG 16, 7-day backups (the default),
-  # public endpoint with a firewall rule for this machine only. Password auth
-  # stays on for the moment: the Entra admin is added in the next step and
-  # password auth is switched off only after an Entra login has worked.
+  # public endpoint with a firewall rule for the machine running this script.
+  # Entra-only from the first second: the signed-in user is the server's
+  # Entra administrator and password authentication is never enabled, so no
+  # bootstrap password ever exists. (The first draft enabled password auth
+  # and turned it off after an Entra login had worked; azure-cli 2.90 lets
+  # `create` do it in one call, which is strictly better.) The API still
+  # insists on an admin password even with password auth disabled; it gets a
+  # random one that is never printed or stored and cannot be used to log in.
   az postgres flexible-server create \
     -g "$RG" -n "$SERVER" -l "$LOC" \
     --tier Burstable --sku-name Standard_B1ms --storage-size 32 --version 16 \
     --backup-retention 7 \
-    --active-directory-auth Enabled --password-auth Enabled \
-    --admin-user wh_bootstrap --admin-password "$(openssl rand -base64 24)" \
+    --microsoft-entra-auth Enabled --password-auth Disabled \
+    --admin-user wh_unused --admin-password "$(openssl rand -base64 24)" \
+    --admin-object-id "$(me_oid)" --admin-display-name "$(me_upn)" --admin-type User \
     --public-access "$MY_IP" \
-    --database-name "$DB" \
     --yes -o table
-  echo "server $SERVER.postgres.database.azure.com  db $DB  firewall: $MY_IP only"
+  az postgres flexible-server db create -g "$RG" -s "$SERVER" -d "$DB" -o none
+  echo "server $SERVER.postgres.database.azure.com  db $DB  firewall: $MY_IP only  Entra admin: $(me_upn)"
 }
 
 step_entra_admin() {
-  az postgres flexible-server microsoft-entra-admin create \
-    -g "$RG" -s "$SERVER" \
-    --display-name "$(me_upn)" --object-id "$(me_oid)" --type User -o none
-  echo "Entra admin: $(me_upn)"
+  # Nothing to create — step_server set it. This prints the login to verify.
+  az postgres flexible-server microsoft-entra-admin list -g "$RG" -s "$SERVER" -o table
   echo "test it:  PGPASSWORD=\$(az account get-access-token --resource-type oss-rdbms --query accessToken -o tsv) \\"
   echo "          psql \"host=$SERVER.postgres.database.azure.com dbname=$DB user=$(me_upn) sslmode=require\""
 }
 
-step_disable_password() {
-  # Only after step_entra_admin's psql worked. From here on there is no
-  # password anywhere on this server.
-  az postgres flexible-server update -g "$RG" -n "$SERVER" --password-auth Disabled -o none
-  echo "password authentication disabled; Entra only"
+step_firewall() {
+  # Add another client IP (the workstation the tests run from). Cloud Shell
+  # and a laptop have different addresses; each gets its own named rule.
+  local ip="${1:-$MY_IP}"
+  az postgres flexible-server firewall-rule create -g "$RG" -n "$SERVER" \
+    --rule-name "client-$(echo "$ip" | tr . -)" --start-ip-address "$ip" --end-ip-address "$ip" -o none
+  echo "firewall: allowed $ip"
 }
 
 step_pgaudit() {
@@ -143,13 +149,15 @@ step_destroy() {
   echo "deleting $RG in the background; service principals removed"
 }
 
-STEPS="group server entra_admin disable_password pgaudit keyvault principals env cost destroy"
+STEPS="group server entra_admin firewall pgaudit keyvault principals env cost destroy"
 [ $# -gt 0 ] || { echo "usage: $0 all | {$STEPS} ..."; exit 2; }
 for s in "$@"; do
   case "$s" in
     all)
       step_group; step_server; step_entra_admin
-      echo; echo ">> verify the Entra psql login above, then run: $0 disable_password pgaudit keyvault principals env" ;;
+      echo; echo ">> verify the Entra psql login above, then run: $0 pgaudit keyvault principals env" ;;
+    firewall=*)
+      step_firewall "${s#firewall=}" ;;
     *)
       case " $STEPS " in *" $s "*) "step_$s" ;; *) echo "unknown step: $s"; exit 2 ;; esac ;;
   esac

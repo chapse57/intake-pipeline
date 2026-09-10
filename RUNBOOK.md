@@ -218,9 +218,20 @@ principals. Nothing else was created.
 
 ### What went wrong, and what was done about it
 
-_(to be filled in from the actual run — the credential-loss entry in the
-n8n section above is the standard: what was seen, what it turned out to be,
-what changed.)_
+Run on 2026-09-10 from Azure Cloud Shell (azure-cli 2.90.0), because both
+the sandbox this was built in and the workstation's session shell have
+`login.microsoftonline.com` blocked by egress policy — `az login` cannot even
+fetch the tenant's OpenID configuration (proxy 403). Cloud Shell is already
+authenticated as the portal user, so MFA was satisfied by the portal login.
+The script was typed into the shell verbatim and its sha256 checked against
+the repository copy before every run.
+
+| what was seen | what it was | what changed |
+|---|---|---|
+| `unrecognized arguments: --active-directory-auth Enabled` | the flag was renamed in azure-cli; it is `--microsoft-entra-auth` in 2.90 | renamed. While in the help text: `create` now takes `--admin-object-id / --admin-display-name / --admin-type` directly, so the server is **Entra-only from creation** and the "enable password auth, verify Entra, disable password auth" dance in the first draft was dropped. No bootstrap password ever exists |
+| `The --database-name argument can only be used when --node-count is present, as it only applies to elastic clusters` | `create --database-name` is reserved for the elastic-cluster form | the database is created afterwards with `az postgres flexible-server db create` |
+| `(MissingRequiredParameter) Parameter 'AdministratorLoginPassword' must be specified` — with `--password-auth Disabled` | the control plane requires an admin password even when password authentication is off | `--admin-user wh_unused --admin-password "$(openssl rand -base64 24)"`: random, never printed or stored, and unusable because password auth is disabled |
+| `WARNING: Your server 'intake-wh-…' is using sku 'Standard_B1ms' (Paid Tier)` | the CLI does not know about free-account grants; it warns for every SKU except none | ignored; the measured cost below is the real answer |
 
 ### Measured cost
 

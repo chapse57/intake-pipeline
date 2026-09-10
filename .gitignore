@@ -10,3 +10,4 @@ n8n/workflows/TEMP_*.json
 # portfolio screenshots: they contain a real mailbox and demo record ids,
 # and a public repo is grep-able in a way an Upwork image is not
 upwork-assets/
+.env.warehouse.local

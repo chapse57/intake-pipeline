@@ -48,7 +48,14 @@ docusign/
   build_template_workflow.py  emits a throwaway n8n workflow that creates the
                             four DocuSign templates from those PDFs and then
                             reads the tabs back to prove the anchors landed
-tests/                T1–T12 plus structural checks on the workflow files
+warehouse/
+  migrations/         001_schemas … 006_roles: four schemas, manifest, model, grants
+  migrate.py          applies them once each, hash-checked
+  load.py             the loader: hash → manifest → raw → validate → dedupe → core/restricted
+  conn.py             admin / loader / analyst identities; password or Entra token
+  azure/provision.sh  the Azure resources as az commands
+docs/warehouse.md     ERD + data dictionary
+tests/                T1–T12, W1–W9, plus structural checks on the workflow files
 ```
 
 ## Running
@@ -63,6 +70,9 @@ pytest -m offline
 cp .env.example .env && $EDITOR .env
 set -a && source .env && set +a
 pytest -m integration
+
+# warehouse: needs a PostgreSQL 16 and three identities (see below)
+pytest -m warehouse
 ```
 
 Integration tests skip themselves with a named list of missing variables
@@ -262,6 +272,7 @@ what has to be captured by hand.
 | T10 | Xero 5xx → retries, writes an alert row, writes nothing to Xero | live | `test_dispatch.py` |
 | T11 | Second recruiter re-submits → attribution does not move | live | `test_dedupe.py` |
 | T12 | Batch of 20 with 6 planted duplicates | live | `test_batch.py` |
+| W1–W9 | Warehouse: migrations, atomic load, refusal, supersede, role isolation, normalization parity, pgaudit | warehouse | `test_warehouse.py` |
 
 ## Fixture design
 
@@ -362,6 +373,69 @@ explicitly turned it on. T10 skips itself when unset.
 **`clean` archives rows before a test, not after.** When an integration test
 fails, the rows it produced are the evidence; a teardown that deletes them
 destroys the only record of what happened.
+
+## PostgreSQL warehouse layer
+
+The same 20 submissions, loaded into a PostgreSQL model where contact details
+are in a schema analysts cannot enter. Built to be the small end of a data
+warehouse: numbered migrations, an immutable load manifest, one loader with
+one entry point, and a role split that a test proves rather than a README
+asserts. `docs/warehouse.md` has the ERD and data dictionary.
+
+```
+raw         the file as received, one row per line, tagged with a load_id     loader only
+ref         recruiters, roles, phone regions, the normalization functions      everyone reads
+core        deduplicated candidates — name, role, domain, recruiter; no email, no phone
+restricted  email, phone and the dedupe keys, one row per candidate            loader only
+```
+
+```bash
+python -m warehouse.migrate                    # applies 001…006 once each
+python -m warehouse.load data/candidates.csv   # → 20 rows, 14 candidates, 6 duplicates flagged
+python -m warehouse.load data/candidates.csv   # → refused: these exact bytes are already loaded
+```
+
+What the loader promises, and the test that checks it:
+
+| | test |
+|---|---|
+| Every line lands in `raw` verbatim; the manifest records hash, size, row count, status, who, when | W2 |
+| The same bytes are never loaded twice; the same source is replaced only with `--supersede`, and the old load stays on disk as `superseded` | W3, W5 |
+| One bad line fails the whole load, all bad lines are listed by line number, and no row from a failed load exists afterwards | W4 |
+| Dedupe keys are computed by the database (`email_norm` is a generated column, `phone_e164` a trigger), and they agree with `n8n/normalize.js` on every row | W2, W8 |
+| Attribution stays with the first submitter when a second recruiter re-sends the same person | W2 |
+| The `wh_analyst` role gets `permission denied` on every table, sequence and function in `raw` and `restricted`, can read `core`/`ref`, and cannot write anything | W6 |
+| The `wh_loader` role cannot `DELETE`, `TRUNCATE`, `DROP` or edit a stored row anywhere | W7 |
+
+```
+$ pytest -m warehouse -v
+test_w1_migrations_apply_once PASSED
+test_w2_load_counts_and_flags_match_fixture PASSED
+test_w3_same_bytes_are_refused PASSED
+test_w4_bad_lines_fail_atomically_and_itemized PASSED
+test_w5_supersede_replaces_current_load_and_keeps_history PASSED
+test_w6_analyst_is_denied_everything_in_raw_and_restricted PASSED
+test_w7_loader_cannot_delete_or_truncate PASSED
+test_w8_sql_normalization_matches_normalize_js PASSED
+test_w9_pgaudit_is_loaded SKIPPED (pgaudit not loaded; Azure-only check)
+8 passed, 1 skipped
+```
+
+That run is against a local PostgreSQL 16. **The Azure run is pending** —
+`warehouse/azure/provision.sh` is the plan (Flexible Server B1ms, Entra-only
+authentication, TLS, IP allow-list, pgaudit, two service principals with
+their secrets in Key Vault); RUNBOOK.md will carry what actually happened
+and the measured monthly cost once it has run. Until then no claim about
+Azure is made here.
+
+### Running it locally
+
+```bash
+# any PostgreSQL 16; this is the local dev script
+warehouse/local_dev.sh              # creates db intake_wh + wh_admin/loader_test/analyst_test
+set -a && source .env.warehouse.local && set +a
+python -m warehouse.migrate && pytest -m warehouse -v
+```
 
 ## Known limitation: the intake webhook is unauthenticated
 

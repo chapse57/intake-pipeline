@@ -1,2 +1,6 @@
 pytest>=8.0
 requests>=2.31
+psycopg[binary]>=3.2     # warehouse tier
+# Azure only (Entra token + Key Vault). Not needed for the local run.
+# azure-identity>=1.17
+# azure-keyvault-secrets>=4.8

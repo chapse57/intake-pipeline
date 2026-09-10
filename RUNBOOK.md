@@ -166,3 +166,62 @@ Order that reads well without narration:
 
 Nothing in that sequence needs editing or voice-over; it is the claim and the
 proof in the same frame.
+
+## Warehouse tier — PostgreSQL on Azure
+
+**Status 2026-09-10:** the schema, loader and W1–W8 have run against a local
+PostgreSQL 16 (8 passed, W9 skipped because pgaudit is not installed
+locally). The Azure server has not been created yet. Everything below the
+"Reproduce from nothing" heading is the plan; it becomes the record when
+the run happens, and the "What went wrong" list is filled in from that run,
+not from imagination.
+
+### Why these choices
+
+| choice | reason |
+|---|---|
+| Flexible Server, Burstable B1ms, 32 GiB, PG 16 | the smallest SKU; 750 h/month free for 12 months on a free/student subscription, so the recorded cost should be the storage + backup lines only |
+| Entra ID authentication, password auth **disabled** | one place to revoke a person; no password to leak in a `.env` or a screenshot. Turned off only after an Entra login has been seen to work |
+| public endpoint + firewall allow-list, **not** a private endpoint | a private endpoint needs a VNet and something inside it to connect from (a VM or a runner), which is the only real cost on this bill. For one loader on one workstation, an IP allow-list plus TLS-required is the proportionate control. This is the first thing to change if the loader moves to a scheduled runner |
+| TLS required | Flexible Server default (`require_secure_transport = on`); `conn.py` adds `sslmode=require` under Entra auth so a mis-typed DSN cannot fall back to plaintext |
+| two service principals (loader, analyst), secrets in Key Vault, RBAC mode | the tests need two identities to prove the role split; humans use their own Entra login. `conn.py` fetches the secret at connect time, so it is never in a file |
+| pgaudit `write,ddl,role` | every INSERT/UPDATE/DELETE, every schema change, every GRANT goes to the server log. `read` is left off: on B1ms, logging every analyst SELECT is the one setting that would visibly cost something |
+| 7-day backups | the default; PITR to any second in the window. The manifest makes most restores unnecessary (a bad load never commits), so this is for operator error, not loader error |
+
+### Reproduce from nothing
+
+Needs: `az` CLI logged in as the subscription owner, `psql`, Python 3.11+
+with `pip install -r requirements.txt azure-identity azure-keyvault-secrets`.
+
+```bash
+az login --use-device-code
+warehouse/azure/provision.sh all             # group, server, Entra admin   (~5 min, the server create is the wait)
+# it prints a psql line — run it. If you get a prompt, Entra works.
+warehouse/azure/provision.sh disable_password pgaudit keyvault principals env
+# `env` prints the .env block; paste it in. No secrets in it.
+set -a && source .env && set +a
+psql "$WAREHOUSE_ADMIN_DSN" -c "CREATE EXTENSION pgaudit;"     # PGPASSWORD from az account get-access-token --resource-type oss-rdbms
+python -m warehouse.migrate
+psql "$WAREHOUSE_ADMIN_DSN" <<'SQL'                            # bind the two principals to the two group roles
+SELECT * FROM pgaadauth_create_principal_with_oid('intake-wh-loader',  '<loader object_id from principals step>',  'service', false, false);
+SELECT * FROM pgaadauth_create_principal_with_oid('intake-wh-analyst', '<analyst object_id>',                    'service', false, false);
+GRANT wh_loader  TO "intake-wh-loader";
+GRANT wh_analyst TO "intake-wh-analyst";
+SQL
+python -m warehouse.load data/candidates.csv
+pytest -m warehouse -v
+warehouse/azure/provision.sh cost            # month-to-date, from the billing API
+```
+
+Tear-down is `provision.sh destroy` — resource group and the two service
+principals. Nothing else was created.
+
+### What went wrong, and what was done about it
+
+_(to be filled in from the actual run — the credential-loss entry in the
+n8n section above is the standard: what was seen, what it turned out to be,
+what changed.)_
+
+### Measured cost
+
+_(pending; the `cost` step output, pasted, with the date range.)_

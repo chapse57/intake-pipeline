@@ -70,6 +70,11 @@ step_firewall() {
 }
 
 step_pgaudit() {
+  # Azure gates CREATE EXTENSION behind an allow-list parameter as well as
+  # shared_preload_libraries; without azure.extensions the CREATE fails with
+  # "not allow-listed for azure_pg_admin users".
+  az postgres flexible-server parameter set -g "$RG" -s "$SERVER" \
+    --name azure.extensions --value pgaudit -o none
   az postgres flexible-server parameter set -g "$RG" -s "$SERVER" \
     --name shared_preload_libraries --value pgaudit -o none
   az postgres flexible-server parameter set -g "$RG" -s "$SERVER" \

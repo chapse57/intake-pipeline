@@ -139,12 +139,38 @@ EOF
 }
 
 step_cost() {
-  # What the month has actually cost so far, from the billing API.
-  az consumption usage list --start-date "$(date -u +%Y-%m-01)" --end-date "$(date -u +%Y-%m-%d)" \
-    --query "[?contains(instanceName, 'intake-wh')].{name:instanceName, cost:pretaxCost, currency:currency}" -o table \
-    || az costmanagement query --type ActualCost --timeframe MonthToDate \
-         --scope "/subscriptions/$(az account show --query id -o tsv)/resourceGroups/$RG" \
-         --dataset-aggregation '{"totalCost":{"name":"PreTaxCost","function":"Sum"}}' -o table
+  # Two numbers. (1) What the month has actually cost, from the Cost
+  # Management API — `az consumption` returns 404 on a free-trial (MCA)
+  # subscription, so this goes through `az rest`. Usage lands there 8–24 h
+  # after the fact. (2) The list price of what is running, from the public
+  # retail-prices API, so the month can be projected on day one.
+  local sub; sub=$(az account show --query id -o tsv)
+  echo "== actual cost, month to date, resource group $RG =="
+  az rest --method post \
+    --url "https://management.azure.com/subscriptions/$sub/resourceGroups/$RG/providers/Microsoft.CostManagement/query?api-version=2023-11-01" \
+    --body '{"type":"ActualCost","timeframe":"MonthToDate","dataset":{"granularity":"None","aggregation":{"totalCost":{"name":"Cost","function":"Sum"}},"grouping":[{"type":"Dimension","name":"MeterCategory"},{"type":"Dimension","name":"Meter"}]}}' \
+    --query "properties.rows[].{cost:[0], currency:[3], category:[1], meter:[2]}" -o table 2>&1 || true
+  echo "== list price (pay-as-you-go, $LOC) of what is deployed =="
+  LOC="$LOC" python3 - <<'PY'
+import json, os, urllib.parse, urllib.request
+loc = os.environ["LOC"]
+f = ("serviceName eq 'Azure Database for PostgreSQL' and armRegionName eq '%s' "
+     "and priceType eq 'Consumption'" % loc)
+url = "https://prices.azure.com/api/retail/prices?$filter=" + urllib.parse.quote(f)
+seen = []
+while url:                                   # the API pages; B1ms is rarely on page 1
+    d = json.load(urllib.request.urlopen(url, timeout=30))
+    for r in d["Items"]:
+        p, m, sku = r["productName"], r["meterName"], r["skuName"]
+        if "Flexible Server" not in p:
+            continue
+        if (("Burstable" in p and sku.lower() == "b1ms") or            # the API spells it B1MS
+            (m.endswith("Data Stored") and ("Storage" in p or "Backup" in p) and "Premium" not in m and "Ultra" not in m)):
+            seen.append("{:>10.5f} {}/{:<10} {} / {}".format(
+                r["retailPrice"], r["currencyCode"], r["unitOfMeasure"], p, m))
+    url = d.get("NextPageLink")
+print("\n".join(sorted(set(seen))) or "no matching meters")
+PY
 }
 
 step_destroy() {

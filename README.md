@@ -16,6 +16,7 @@ tests exercise it with no credentials and no network.
 | WF-2 dispatch — DocuSign templates | **live**; envelope sent from the Closer template and signed |
 | WF-3 completion — idempotency, retry, alert row | **live** against a real Xero organisation |
 | WF-0 error handler | **live**; it caught a real credential failure during setup |
+| PostgreSQL warehouse layer — migrations, immutable loads, role isolation | **live on Azure**; 20 rows → 14 candidates + 6 flagged, `pytest -m warehouse` 9 passed against an Entra-only Flexible Server |
 
 The four steps have also run as one chain, which is a different claim: a
 submission was posted to the webhook, deduped, labelled, guarded and written
@@ -408,7 +409,7 @@ What the loader promises, and the test that checks it:
 | The `wh_loader` role cannot `DELETE`, `TRUNCATE`, `DROP` or edit a stored row anywhere | W7 |
 
 ```
-$ pytest -m warehouse -v
+$ pytest -m warehouse -v            # Azure Database for PostgreSQL Flexible Server, 2026-09-10
 test_w1_migrations_apply_once PASSED
 test_w2_load_counts_and_flags_match_fixture PASSED
 test_w3_same_bytes_are_refused PASSED
@@ -417,16 +418,27 @@ test_w5_supersede_replaces_current_load_and_keeps_history PASSED
 test_w6_analyst_is_denied_everything_in_raw_and_restricted PASSED
 test_w7_loader_cannot_delete_or_truncate PASSED
 test_w8_sql_normalization_matches_normalize_js PASSED
-test_w9_pgaudit_is_loaded SKIPPED (pgaudit not loaded; Azure-only check)
-8 passed, 1 skipped
+test_w9_pgaudit_is_loaded PASSED
+9 passed in 127.57s
 ```
 
-That run is against a local PostgreSQL 16. **The Azure run is pending** —
-`warehouse/azure/provision.sh` is the plan (Flexible Server B1ms, Entra-only
-authentication, TLS, IP allow-list, pgaudit, two service principals with
-their secrets in Key Vault); RUNBOOK.md will carry what actually happened
-and the measured monthly cost once it has run. Until then no claim about
-Azure is made here.
+That run is against a real Azure server, with three different identities
+and no password anywhere:
+
+| | |
+|---|---|
+| server | Azure Database for PostgreSQL Flexible Server, PostgreSQL 16.15, Burstable B1ms (1 vCore, 2 GiB), 32 GiB, 7-day backups, Korea Central |
+| authentication | Microsoft Entra only — password authentication disabled at creation. Admin = the portal user; loader and analyst = two service principals |
+| secrets | the two service principals' client secrets live in Key Vault (RBAC). `conn.py` reads them at connect time; no secret is in `.env`, the repo, or the shell history |
+| network | TLS required (`ssl = on`), public endpoint with a one-IP firewall rule. No private endpoint — see RUNBOOK for why |
+| audit | pgaudit 16.0, `pgaudit.log = write,ddl,role` |
+| loader run | `data/candidates.csv` → 20 rows, 14 candidates, 6 duplicates flagged; second run refused; 7 s end to end including token and Key Vault round-trips |
+| list price | B1ms $0.026/h ($18.98/month) + 32 GiB × $0.131 ($4.19/month) + backup within the free 32 GiB = **$23.2/month, $0.77/day** at Korea Central pay-as-you-go rates, from the retail-prices API. Billed against the free account's 30-day credit; the resource group is deleted when the exercise ends |
+
+`warehouse/azure/provision.sh` is every `az` command that was run, and
+RUNBOOK.md lists the six things that did not work the first time and what
+changed. The same test suite passes against a local PostgreSQL 16 (8 passed,
+W9 skipped because pgaudit is not installed there).
 
 ### Running it locally
 

@@ -169,12 +169,13 @@ proof in the same frame.
 
 ## Warehouse tier — PostgreSQL on Azure
 
-**Status 2026-09-10:** the schema, loader and W1–W8 have run against a local
-PostgreSQL 16 (8 passed, W9 skipped because pgaudit is not installed
-locally). The Azure server has not been created yet. Everything below the
-"Reproduce from nothing" heading is the plan; it becomes the record when
-the run happens, and the "What went wrong" list is filled in from that run,
-not from imagination.
+**Status 2026-09-10 (evening):** done on Azure. Server
+`intake-wh-d3d96877` in `intake-wh-rg`, Korea Central; `pytest -m warehouse`
+9 passed in 127.57 s with the three identities below; the loader ran as the
+`intake-wh-loader` service principal reading its secret from Key Vault. The
+same suite passes locally (8 passed, W9 skipped). Everything under
+"Reproduce from nothing" has been run once, in the order written, from Azure
+Cloud Shell.
 
 ### Why these choices
 
@@ -190,27 +191,32 @@ not from imagination.
 
 ### Reproduce from nothing
 
-Needs: `az` CLI logged in as the subscription owner, `psql`, Python 3.11+
-with `pip install -r requirements.txt azure-identity azure-keyvault-secrets`.
+Needs: a shell where `az` is logged in as the subscription owner — Azure
+Cloud Shell is the easy answer and is what was used — `psql`, Python 3.11+.
 
 ```bash
-az login --use-device-code
-warehouse/azure/provision.sh all             # group, server, Entra admin   (~5 min, the server create is the wait)
-# it prints a psql line — run it. If you get a prompt, Entra works.
-warehouse/azure/provision.sh disable_password pgaudit keyvault principals env
-# `env` prints the .env block; paste it in. No secrets in it.
-set -a && source .env && set +a
-psql "$WAREHOUSE_ADMIN_DSN" -c "CREATE EXTENSION pgaudit;"     # PGPASSWORD from az account get-access-token --resource-type oss-rdbms
+warehouse/azure/provision.sh all             # group, server (Entra-only, ~5 min), prints the psql test line
+# run the printed psql line. A prompt means Entra auth works. Then:
+warehouse/azure/provision.sh pgaudit keyvault principals env > env.azure   # ~3 min, one server restart
+set -a && source env.azure && set +a
+export PGPASSWORD=$(az account get-access-token --resource-type oss-rdbms --query accessToken -o tsv)
+psql "$WAREHOUSE_ADMIN_DSN" -c "CREATE EXTENSION pgaudit;"
+pip install -r requirements.txt azure-identity azure-keyvault-secrets
 python -m warehouse.migrate
-psql "$WAREHOUSE_ADMIN_DSN" <<'SQL'                            # bind the two principals to the two group roles
-SELECT * FROM pgaadauth_create_principal_with_oid('intake-wh-loader',  '<loader object_id from principals step>',  'service', false, false);
-SELECT * FROM pgaadauth_create_principal_with_oid('intake-wh-analyst', '<analyst object_id>',                    'service', false, false);
+# bind the two service principals to the two group roles. The pgaadauth_*
+# functions exist only in the `postgres` database, not in intake_wh:
+LOID=$(az ad sp list --display-name intake-wh-loader  --query '[0].id' -o tsv)
+AOID=$(az ad sp list --display-name intake-wh-analyst --query '[0].id' -o tsv)
+psql "${WAREHOUSE_ADMIN_DSN/dbname=intake_wh/dbname=postgres}" <<SQL
+SELECT * FROM pgaadauth_create_principal_with_oid('intake-wh-loader',  '$LOID', 'service', false, false);
+SELECT * FROM pgaadauth_create_principal_with_oid('intake-wh-analyst', '$AOID', 'service', false, false);
 GRANT wh_loader  TO "intake-wh-loader";
 GRANT wh_analyst TO "intake-wh-analyst";
 SQL
-python -m warehouse.load data/candidates.csv
-pytest -m warehouse -v
-warehouse/azure/provision.sh cost            # month-to-date, from the billing API
+python -m warehouse.load data/candidates.csv    # runs as intake-wh-loader
+pytest -m warehouse -v                          # 9 passed, ~2 min (a token + Key Vault read per connection)
+warehouse/azure/provision.sh cost
+warehouse/azure/provision.sh firewall=<your.ip>  # to run any of this from a workstation instead
 ```
 
 Tear-down is `provision.sh destroy` — resource group and the two service
@@ -234,6 +240,8 @@ the repository copy before every run.
 | `ERROR: Table output unavailable` right after the server was created — and, because of `set -e`, the script stopped before creating the database | `create -o table` cannot render the response of this API version; the server itself was fine | `-o none` on the create; the database was created by hand this once and the script now does it |
 | `db create … -d` and `firewall-rule … -n <server>`: `unrecognized arguments` | those subcommands take `--name` for the *database/rule* and `-s` for the server | fixed both; every subcommand in the script has now run at least once |
 | `CREATE EXTENSION pgaudit` → `extension "pgaudit" is not allow-listed for "azure_pg_admin" users` — even though `shared_preload_libraries` already showed `pgaudit` | Azure has a second gate: the server parameter `azure.extensions` is the allow-list for `CREATE EXTENSION` | `parameter set --name azure.extensions --value pgaudit` added to the pgaudit step, before the preload; `pg_extension` then shows `pgaudit 16.0` |
+| `function pgaadauth_create_principal_with_oid(...) does not exist` in `intake_wh` | the `pgaadauth` functions are installed in the `postgres` maintenance database only; roles are cluster-wide so that is where you bind them | run the binding against `dbname=postgres`; the reproduce block above does |
+| `az consumption usage list` → `doesn't have valid WebDirect/AIRS offer type` | the consumption API is for legacy offers; a free-trial subscription is an MCA one | `step_cost` uses the Cost Management query API through `az rest`, plus the public retail-prices API for list prices (which spells the SKU `B1MS`) |
 | `WARNING: Your server 'intake-wh-…' is using sku 'Standard_B1ms' (Paid Tier)` | the CLI does not know about free-account grants; it warns for every SKU except none | ignored; the measured cost below is the real answer |
 
 What worked first time: the Entra login. `az account get-access-token
@@ -245,4 +253,29 @@ personal Microsoft account gets in its own tenant), `sslmode=require`.
 
 ### Measured cost
 
-_(pending; the `cost` step output, pasted, with the date range.)_
+List price of what is deployed, Korea Central, pay-as-you-go, from the
+retail-prices API on 2026-09-10:
+
+| meter | rate | per month |
+|---|---|---|
+| Burstable B1ms compute | $0.026 / hour | $18.98 (730 h) |
+| Flexible Server storage, 32 GiB | $0.131 / GiB-month | $4.19 |
+| Backup storage (7-day PITR) | $0.095 / GiB-month beyond 32 GiB free | $0 at this size |
+| Key Vault, RBAC, two secrets, ~20 operations | $0.03 / 10,000 operations | $0.00 |
+| **total** | | **$23.17 / month ≈ $0.77 / day** |
+
+Actual billed cost: the Cost Management API had nothing for the resource
+group at the time of the run (usage appears 8–24 h after the fact, and the
+first call was rate-limited). The subscription is a free account with a
+30-day $200 credit; whether the 12-months-free grant covers B1ms after that
+was not confirmed and does not matter here, because the resource group is
+destroyed at the end of the exercise — at list price the three days cost
+about $2.30.
+
+Not built, and why: a private endpoint (needs a VNet plus something inside
+it to connect from — a VM or a runner — which would be the only real line on
+this bill; for one loader on one workstation an IP allow-list with TLS
+required is the proportionate control, and it is the first thing to change
+if the loader moves to a scheduled runner); high availability (doubles the
+compute for a dataset of 20 rows); `pgaudit.log = read` (on B1ms, logging
+every analyst SELECT is the one setting that would visibly cost something).

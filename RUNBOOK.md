@@ -231,7 +231,16 @@ the repository copy before every run.
 | `unrecognized arguments: --active-directory-auth Enabled` | the flag was renamed in azure-cli; it is `--microsoft-entra-auth` in 2.90 | renamed. While in the help text: `create` now takes `--admin-object-id / --admin-display-name / --admin-type` directly, so the server is **Entra-only from creation** and the "enable password auth, verify Entra, disable password auth" dance in the first draft was dropped. No bootstrap password ever exists |
 | `The --database-name argument can only be used when --node-count is present, as it only applies to elastic clusters` | `create --database-name` is reserved for the elastic-cluster form | the database is created afterwards with `az postgres flexible-server db create` |
 | `(MissingRequiredParameter) Parameter 'AdministratorLoginPassword' must be specified` — with `--password-auth Disabled` | the control plane requires an admin password even when password authentication is off | `--admin-user wh_unused --admin-password "$(openssl rand -base64 24)"`: random, never printed or stored, and unusable because password auth is disabled |
+| `ERROR: Table output unavailable` right after the server was created — and, because of `set -e`, the script stopped before creating the database | `create -o table` cannot render the response of this API version; the server itself was fine | `-o none` on the create; the database was created by hand this once and the script now does it |
+| `db create … -d` and `firewall-rule … -n <server>`: `unrecognized arguments` | those subcommands take `--name` for the *database/rule* and `-s` for the server | fixed both; every subcommand in the script has now run at least once |
 | `WARNING: Your server 'intake-wh-…' is using sku 'Standard_B1ms' (Paid Tier)` | the CLI does not know about free-account grants; it warns for every SKU except none | ignored; the measured cost below is the real answer |
+
+What worked first time: the Entra login. `az account get-access-token
+--resource-type oss-rdbms` as `PGPASSWORD`, user
+`washkim1209_gmail.com#EXT#@<tenant>.onmicrosoft.com` (the guest-style UPN a
+personal Microsoft account gets in its own tenant), `sslmode=require`.
+`select current_user` returned that principal; `show ssl` returned `on`;
+`pg_roles` contained no password-capable login role.
 
 ### Measured cost
 

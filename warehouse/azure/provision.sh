@@ -48,8 +48,8 @@ step_server() {
     --admin-user wh_unused --admin-password "$(openssl rand -base64 24)" \
     --admin-object-id "$(me_oid)" --admin-display-name "$(me_upn)" --admin-type User \
     --public-access "$MY_IP" \
-    --yes -o table
-  az postgres flexible-server db create -g "$RG" -s "$SERVER" -d "$DB" -o none
+    --yes -o none
+  az postgres flexible-server db create -g "$RG" -s "$SERVER" --name "$DB" -o none
   echo "server $SERVER.postgres.database.azure.com  db $DB  firewall: $MY_IP only  Entra admin: $(me_upn)"
 }
 
@@ -64,7 +64,7 @@ step_firewall() {
   # Add another client IP (the workstation the tests run from). Cloud Shell
   # and a laptop have different addresses; each gets its own named rule.
   local ip="${1:-$MY_IP}"
-  az postgres flexible-server firewall-rule create -g "$RG" -n "$SERVER" \
+  az postgres flexible-server firewall-rule create -g "$RG" -s "$SERVER" \
     --rule-name "client-$(echo "$ip" | tr . -)" --start-ip-address "$ip" --end-ip-address "$ip" -o none
   echo "firewall: allowed $ip"
 }

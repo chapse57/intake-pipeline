@@ -537,7 +537,7 @@ counted separately and never reported as inquiries.
 
 | Week | Requests (signed) | Rejected unsigned | Spam: screen / model | Real inquiries | Workflow errors | Outages / minutes down | Anthropic cost |
 |---|---|---|---|---|---|---|---|
-| 2026-10-24 (setup) | 5 test | 1 test probe | 0 / 0 | 0 | 0 | monitoring started | < $0.01 |
+| 2026-10-24 (setup) | 4 test | 1 test probe | 0 / 0 | 0 | 0 | monitoring started | < $0.01 |
 
 ## Notion schema notes
 

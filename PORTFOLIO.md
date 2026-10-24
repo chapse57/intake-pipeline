@@ -261,3 +261,55 @@ Concrete fills, by the requirement they name:
 - Do not call the 20 candidates real data. They are generated; say so if asked.
   It costs nothing and it is the difference between a portfolio piece and a
   liability.
+
+---
+
+## Second Upwork entry: WF-4, the public inquiry form (added 2026-10-24)
+
+A separate project, so it can be pinned to Claude and automation proposals
+without the recruiting story. Images are in `upwork-assets/wf4/`, 1600x1200,
+in this order; every number on them comes from the Events and Inquiries
+tables, the n8n execution list, or `/api/status` on 2026-10-24.
+
+**Title** (67)
+
+```
+Live inquiry form on n8n: signed relay, spam screen, Claude + guard
+```
+
+**Your role** (85)
+
+```
+Sole developer: page, Cloudflare Worker relay and monitor, n8n workflow, guard, tests
+```
+
+**Description** (563)
+
+```
+A public inquiry form, live since Oct 24, 2026. A Cloudflare Worker signs each request; n8n checks the signature, screens spam with free rules, asks Claude for a label, and a deterministic guard decides whether to trust it. Every request becomes a Notion row, spam included. New inquiries, errors and outages go to Slack.
+
+So far it has seen test traffic only: 4 signed requests and 1 unsigned probe, which got a 401 and never reached the model. The first live run caught a guard bug, now a regression test.
+
+136 offline tests.
+github.com/chapse57/intake-pipeline
+```
+
+**Skills:** `n8n · Claude API · Cloudflare · API Integration · AI Automation`
+
+**Images**
+
+1. `01-cover.png` - architecture and four measured facts (4.4 s webhook to Slack, 401, 23 nodes, 136 tests)
+2. `02-one-request-six-log-rows.png` - run 5, sent through the live page, its six Events rows
+3. `03-live-inquiry-page.png` - the page, rendered from `worker/public/index.html`
+4. `04-first-live-run-caught-a-bug.png` - runs 1 and 2, same message, guard reject then accept
+5. `05-n8n-canvas.png` - the published WF-4 canvas, cut into three rows
+6. `06-before-the-model-and-uptime.png` - signature, spam screen, uptime monitor
+7. Web link: github.com/chapse57/intake-pipeline (its preview shows the repo About text, so keep that line current)
+
+**Left out on purpose.** The live page address is not in the entry or the
+images: it is a contact form, and Upwork treats off-platform contact routes in
+a profile as a policy problem. Share it inside a contract or when a client asks
+to see it running.
+
+**Update weekly** with the operations log: the description's second paragraph
+and the cover's last line are the only places the traffic numbers appear.

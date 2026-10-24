@@ -11,3 +11,12 @@ n8n/workflows/TEMP_*.json
 # and a public repo is grep-able in a way an Upwork image is not
 upwork-assets/
 .env.warehouse.local
+
+# self-hosted n8n secrets (encryption key, ngrok token, relay secret)
+deploy/*.env
+
+# wrangler's local cache next to worker/wrangler.toml
+.wrangler/
+node_modules/
+# one-off commit helper for the 2026-10-24 push
+push-wf4.bat

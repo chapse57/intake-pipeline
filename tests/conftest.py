@@ -25,6 +25,7 @@ import pytest
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 NORMALIZE_JS = ROOT / "n8n" / "normalize.js"
 GUARD_JS = ROOT / "n8n" / "guard.js"
+INQUIRY_JS = ROOT / "n8n" / "inquiry.js"
 
 NOTION_VERSION = "2022-06-28"
 
@@ -73,6 +74,14 @@ def run_guard():
     """run_guard([case, ...]) -> [result, ...] keyed by the case's id."""
     def _call(cases):
         return _run_node(GUARD_JS, cases)
+    return _call
+
+
+@pytest.fixture(scope="session")
+def run_inquiry():
+    """run_inquiry([{"id":..,"op":..}, ...]) -> {id: result}. Runs n8n/inquiry.js."""
+    def _call(reqs):
+        return {r["id"]: r for r in _run_node(INQUIRY_JS, reqs)}
     return _call
 
 

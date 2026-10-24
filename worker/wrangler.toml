@@ -1,0 +1,26 @@
+name = "ether-inquiry"
+main = "inquiry-relay.js"
+compatibility_date = "2026-10-01"
+
+# The inquiry page (public/index.html) is served as a static asset;
+# anything that is not a file (POST /api/inquiry) reaches the Worker.
+[assets]
+directory = "./public"
+
+# Uptime check of the self-hosted n8n every 5 minutes (monitor.js)
+[triggers]
+crons = ["*/5 * * * *"]
+
+[observability]
+enabled = true
+
+# Secrets, set by deploy-relay.bat (never committed):
+#   INQUIRY_SECRET   same value as ../deploy/inquiry.env
+#   N8N_WEBHOOK_URL  https://<ngrok domain>/webhook/inquiry
+#   SLACK_WEBHOOK_URL  down/up notices from the monitor
+# The STATUS KV namespace block below is appended by deploy-monitor.bat.
+
+[[kv_namespaces]]
+binding = "STATUS"
+id = "cc0c302df0104917808ae6f557d80d38"
+

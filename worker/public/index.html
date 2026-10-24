@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ether — Contact</title>
+<meta name="description" content="Ether builds data collection, data pipelines, workflow automation and LLM features. Send an inquiry.">
+<meta name="robots" content="index, follow">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Ccircle cx='24' cy='24' r='22' fill='%232563EB'/%3E%3Cellipse cx='24' cy='24' rx='15' ry='6.5' fill='none' stroke='white' stroke-width='2.4' transform='rotate(-25 24 24)'/%3E%3Ccircle cx='24' cy='24' r='4.5' fill='white'/%3E%3Ccircle cx='37.3' cy='17.6' r='2.6' fill='%2393C5FD'/%3E%3C/svg%3E">
+<style>
+  :root {
+    --bg: #f6f7fb; --card: #ffffff; --ink: #0f172a; --muted: #5b6475; --line: #e2e6ef;
+    --blue: #2563eb; --blue-ink: #ffffff; --soft: #eaf1ff; --ok: #0f7a4a; --err: #b42318;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0b1020; --card: #121a2e; --ink: #e8ecf5; --muted: #9aa4b8; --line: #23304d;
+      --blue: #3b82f6; --soft: #15223f; --ok: #4ade80; --err: #f87171;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background: var(--bg); color: var(--ink);
+    font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  }
+  .wrap { max-width: 1040px; margin: 0 auto; padding: 32px 16px 48px; }
+  header { display: flex; align-items: center; gap: 12px; margin-bottom: 56px; }
+  header svg { width: 40px; height: 40px; flex: none; }
+  .word { font-weight: 700; letter-spacing: .22em; font-size: 15px; }
+  .grid { display: grid; grid-template-columns: 1fr; gap: 40px; align-items: start; }
+  @media (min-width: 860px) { .grid { grid-template-columns: 1fr 1.05fr; gap: 64px; } }
+  h1 { font-size: clamp(30px, 4.4vw, 44px); line-height: 1.12; letter-spacing: -.02em; margin: 0 0 18px; }
+  .lede { color: var(--muted); font-size: 18px; margin: 0 0 28px; max-width: 34em; }
+  .what { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+  .what li { display: flex; gap: 12px; align-items: baseline; }
+  .what b { font-weight: 600; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--blue); flex: none; transform: translateY(-1px); }
+  .what span.d { color: var(--muted); }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 28px; }
+  .card h2 { font-size: 20px; margin: 0 0 4px; }
+  .card .sub { color: var(--muted); margin: 0 0 22px; font-size: 15px; }
+  label { display: block; font-weight: 600; font-size: 14px; margin: 0 0 6px; }
+  .opt { color: var(--muted); font-weight: 400; }
+  .field { margin-bottom: 16px; }
+  .row { display: grid; grid-template-columns: 1fr; gap: 0 14px; }
+  @media (min-width: 520px) { .row { grid-template-columns: 1fr 1fr; } }
+  input, textarea {
+    width: 100%; font: inherit; color: var(--ink); background: var(--bg);
+    border: 1px solid var(--line); border-radius: 10px; padding: 11px 12px;
+  }
+  textarea { min-height: 140px; resize: vertical; }
+  input:focus, textarea:focus { outline: 2px solid var(--blue); outline-offset: 1px; border-color: transparent; }
+  .hp { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
+  button {
+    width: 100%; font: inherit; font-weight: 600; border: 0; border-radius: 10px; padding: 13px 16px;
+    background: var(--blue); color: var(--blue-ink); cursor: pointer;
+  }
+  button[disabled] { opacity: .6; cursor: progress; }
+  .note { color: var(--muted); font-size: 13px; margin: 12px 0 0; }
+  .status { margin: 14px 0 0; padding: 12px 14px; border-radius: 10px; font-size: 15px; display: none; }
+  .status.ok { display: block; background: var(--soft); color: var(--ok); }
+  .status.err { display: block; background: var(--soft); color: var(--err); }
+  footer { color: var(--muted); font-size: 13px; margin-top: 56px; border-top: 1px solid var(--line); padding-top: 18px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <svg viewBox="0 0 48 48" aria-hidden="true">
+      <circle cx="24" cy="24" r="22" fill="#2563EB"/>
+      <ellipse cx="24" cy="24" rx="15" ry="6.5" fill="none" stroke="#fff" stroke-width="2.4" transform="rotate(-25 24 24)"/>
+      <circle cx="24" cy="24" r="4.5" fill="#fff"/>
+      <circle cx="37.3" cy="17.6" r="2.6" fill="#93C5FD"/>
+    </svg>
+    <span class="word">ETHER</span>
+  </header>
+
+  <div class="grid">
+    <section>
+      <h1>Data pipelines and workflow automation, built to keep running.</h1>
+      <p class="lede">Ether is a software studio in Seoul. Tell me what needs to be collected, moved or automated, and I will reply personally by email.</p>
+      <ul class="what">
+        <li><span class="dot"></span><span><b>Data collection</b> <span class="d">— scheduled scraping and API pulls</span></span></li>
+        <li><span class="dot"></span><span><b>Pipelines</b> <span class="d">— ETL into sheets, databases and warehouses</span></span></li>
+        <li><span class="dot"></span><span><b>Automation</b> <span class="d">— n8n workflows across your tools</span></span></li>
+        <li><span class="dot"></span><span><b>LLM features</b> <span class="d">— classification and retrieval with guardrails</span></span></li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>Send an inquiry</h2>
+      <p class="sub">A few sentences about the job is enough.</p>
+      <form id="f" novalidate>
+        <div class="row">
+          <div class="field"><label for="name">Name</label><input id="name" name="name" autocomplete="name" required maxlength="200"></div>
+          <div class="field"><label for="email">Email</label><input id="email" name="email" type="email" autocomplete="email" required maxlength="320"></div>
+        </div>
+        <div class="field"><label for="message">What do you need?</label><textarea id="message" name="message" required maxlength="5000" placeholder="e.g. Collect prices from 30 supplier sites into a Google Sheet every morning."></textarea></div>
+        <div class="row">
+          <div class="field"><label for="budget">Budget <span class="opt">(optional)</span></label><input id="budget" name="budget" maxlength="200"></div>
+          <div class="field"><label for="timeline">Timeline <span class="opt">(optional)</span></label><input id="timeline" name="timeline" maxlength="200"></div>
+        </div>
+        <div class="hp" aria-hidden="true"><label for="website">Website</label><input id="website" name="website" tabindex="-1" autocomplete="off"></div>
+        <button id="send" type="submit">Send inquiry</button>
+        <p class="status" id="status" role="status" aria-live="polite"></p>
+        <p class="note">Your details are used only to reply to you.</p>
+      </form>
+    </section>
+  </div>
+
+  <footer>© 2026 Ether · Seoul</footer>
+</div>
+<script>
+  // Opened-at time travels with the form: a bot that posts within a few
+  // seconds, or replays a day-old form, is caught by the n8n screen.
+  const openedAt = Date.now();
+  const form = document.getElementById('f');
+  const btn = document.getElementById('send');
+  const status = document.getElementById('status');
+
+  function show(kind, text) { status.className = 'status ' + kind; status.textContent = text; }
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const data = Object.fromEntries(new FormData(form).entries());
+    if (!data.name.trim() || !data.email.trim() || !data.message.trim()) {
+      show('err', 'Please fill in your name, email and a short description.');
+      return;
+    }
+    data.opened_at = openedAt;
+    btn.disabled = true; btn.textContent = 'Sending…'; status.className = 'status';
+    try {
+      const res = await fetch('/api/inquiry', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data),
+      });
+      if (res.ok) {
+        form.reset();
+        show('ok', 'Thanks — your message is in. I will reply by email.');
+      } else if (res.status === 503) {
+        show('err', 'The form is offline for a moment. Please try again a little later.');
+      } else {
+        show('err', 'That did not go through. Please check the fields and try again.');
+      }
+    } catch (err) {
+      show('err', 'Network problem. Please try again.');
+    } finally {
+      btn.disabled = false; btn.textContent = 'Send inquiry';
+    }
+  });
+</script>
+</body>
+</html>

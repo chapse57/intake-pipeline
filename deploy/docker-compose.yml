@@ -1,0 +1,38 @@
+# Self-hosted n8n (free Community edition) for the Ether inquiry pipeline.
+# Start:  docker compose up -d        (from this folder)
+# Stop:   docker compose down
+# Data lives in the n8n_data volume, so stopping or rebooting does not lose workflows.
+services:
+  n8n:
+    image: docker.n8n.io/n8nio/n8n:latest
+    container_name: ether-n8n
+    restart: unless-stopped          # comes back on its own after a reboot
+    ports:
+      - "127.0.0.1:5678:5678"        # editor only reachable from this PC
+    environment:
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
+      - GENERIC_TIMEZONE=Asia/Seoul
+      - TZ=Asia/Seoul
+      - N8N_DIAGNOSTICS_ENABLED=false
+      - N8N_PROXY_HOPS=1
+      - WEBHOOK_URL=${NGROK_DOMAIN:+https://${NGROK_DOMAIN}/}
+      - NODE_FUNCTION_ALLOW_BUILTIN=crypto     # WF-4 Verify node: HMAC check
+      - N8N_BLOCK_ENV_ACCESS_IN_NODE=false     # WF-4 reads INQUIRY_SECRET from env
+    env_file:
+      - inquiry.env                            # INQUIRY_SECRET, kept out of git
+    volumes:
+      - n8n_data:/home/node/.n8n
+
+  tunnel:
+    image: ngrok/ngrok:latest
+    container_name: ether-tunnel
+    restart: unless-stopped
+    profiles: ["public"]             # only starts once the ngrok token is set
+    command: http --url=${NGROK_DOMAIN} n8n:5678
+    environment:
+      - NGROK_AUTHTOKEN=${NGROK_AUTHTOKEN}
+    depends_on:
+      - n8n
+
+volumes:
+  n8n_data:

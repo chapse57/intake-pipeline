@@ -22,9 +22,10 @@ pytestmark = pytest.mark.offline
 # What the Notion Events schema actually offers. Kept in the test rather than
 # read live so this stays offline; update both if the schema changes.
 EVENT_STEPS = {"normalize", "dedupe", "llm-role", "guard", "notion-create",
-               "dispatch-docusign", "docusign-webhook", "idempotency", "xero-contact", "error"}
+               "dispatch-docusign", "docusign-webhook", "idempotency", "xero-contact", "error",
+               "auth", "spam-screen", "llm-label", "notify"}
 EVENT_RESULTS = {"ok", "rejected", "error", "skipped"}
-EVENT_WORKFLOWS = {"WF-1 Intake", "WF-2 Dispatch", "WF-3 Complete", "Error Handler"}
+EVENT_WORKFLOWS = {"WF-1 Intake", "WF-2 Dispatch", "WF-3 Complete", "Error Handler", "WF-4 Inquiry"}
 CANDIDATE_STATUSES = {"New", "Review", "Approved", "Sent", "Onboarded", "Rejected"}
 
 TRIGGERS = {"n8n-nodes-base.webhook", "n8n-nodes-base.errorTrigger",

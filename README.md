@@ -4,9 +4,15 @@ Recruiting intake on n8n: webhook → normalize → duplicate check → Claude
 proposes a role → deterministic guard → Notion → DocuSign → Xero, with every
 step logged to an append-only Events table.
 
+Since 2026-10-24 the same guard pattern also runs **in production** behind a
+public contact form (WF-4): a signed relay on Cloudflare, a free spam screen,
+Claude proposes a label, the guard decides whether to believe it, Notion stores
+every request (spam included), Slack is told about the rest, and an outside
+health check records every outage. See [WF-4 in production](#wf-4-in-production).
+
 Everything here is checkable. The workflows are exported as importable JSON,
-the JavaScript in this repo *is* the JavaScript the n8n Code nodes run, and 80
-tests exercise it with no credentials and no network.
+the JavaScript in this repo *is* the JavaScript the n8n Code nodes run, and the
+offline suite exercises it with no credentials and no network.
 
 ## What has actually run
 
@@ -15,7 +21,9 @@ tests exercise it with no credentials and no network.
 | WF-1 intake — dedupe, Claude, guard, Notion | **live**; 20 submissions → 14 created, 6 flagged, 0 lost |
 | WF-2 dispatch — DocuSign templates | **live**; envelope sent from the Closer template and signed |
 | WF-3 completion — idempotency, retry, alert row | **live** against a real Xero organisation |
-| WF-0 error handler | **live**; it caught a real credential failure during setup |
+| WF-0 error handler | **live**; it caught a real credential failure during setup. Since 2026-10-24 it is WF-4's error workflow and delivers to Slack |
+| WF-4 inquiry form — signature, spam screen, Claude label, guard, Notion, Slack | **in production since 2026-10-24** on self-hosted n8n; first live run found a guard rule that rejected good labels on short messages (fixed, regression-tested) |
+| Cloudflare relay + uptime monitor | **live**; the form, the HMAC signing and a 5-minute outside health check run on one Worker |
 | PostgreSQL warehouse layer — migrations, immutable loads, role isolation | **live on Azure**; 20 rows → 14 candidates + 6 flagged, `pytest -m warehouse` 9 passed against an Entra-only Flexible Server |
 
 The four steps have also run as one chain, which is a different claim: a
@@ -37,12 +45,21 @@ data/
 n8n/
   normalize.js        email/phone normalization + duplicate classification
   guard.js            the deterministic check on the model's role proposal
-  build_workflows.py  emits the four workflow files below
+  inquiry.js          WF-4: relay signature check, spam screen, label guard
+  build_workflows.py  emits the five workflow files below
   workflows/
     WF-0_error_handler.json   Error Trigger → Events row → Slack
     WF-1_intake.json          webhook → normalize → 3 lookups → classify → Claude → guard → Notion
     WF-2_dispatch.json        poll Approved+unsent → Switch(role) → DocuSign → mark Sent
     WF-3_complete.json        DocuSign webhook → idempotency → Xero (explicit 3× retry) → Onboarded
+    WF-4_inquiry.json         signed webhook → spam screen → Claude → guard → Notion → Slack
+worker/
+  public/index.html   the public inquiry form
+  inquiry-relay.js    Cloudflare Worker: serves the form, signs and forwards it to n8n
+  monitor.js          5-minute health check of n8n; Slack on down/up; /api/status
+deploy/
+  docker-compose.yml  self-hosted n8n (free Community edition) + ngrok static domain
+  *.bat               one-click setup steps on the Windows host; secrets stay in deploy/*.env
 docusign/
   build_contracts.py        generates the four role contracts as PDFs
   contracts/*.pdf           Setter / Coach / Closer / Full Cycle, one page each
@@ -56,7 +73,8 @@ warehouse/
   conn.py             admin / loader / analyst identities; password or Entra token
   azure/provision.sh  the Azure resources as az commands
 docs/warehouse.md     ERD + data dictionary
-tests/                T1–T12, W1–W9, plus structural checks on the workflow files
+tests/                T1–T12, W1–W9, I1–I5 (inquiry), R1–R3 / M1–M2 (relay, monitor),
+                      plus structural checks on the workflow files
 ```
 
 ## Running
@@ -64,7 +82,7 @@ tests/                T1–T12, W1–W9, plus structural checks on the workflow 
 ```bash
 pip install -r requirements.txt
 
-# offline: no credentials, no network. 80 assertions.
+# offline: no credentials, no network.
 pytest -m offline
 
 # integration: needs a running n8n and the Notion databases
@@ -210,11 +228,13 @@ Node-level retry is invisible; it produces one error after N silent attempts.
 The loop writes an Events row per attempt, so "retries 3× then alerts" is a
 claim you can verify by reading the log, which is the whole point of the log.
 
-**The alert goes to the log, not to a channel.** `slack_webhook_url` is blank
-in `Config`, and the Slack node continues on error, so the alert exists as an
-Events row and nothing is delivered anywhere. Fill that one value to turn the
-notification on. Until you do, say "writes an alert row" — a claim about a
-delivered alert is disprovable in about ten seconds.
+**The Slack URL is a credential, so it is not in `Config`.** The Slack nodes
+read `SLACK_WEBHOOK_URL` from the n8n environment (`deploy/inquiry.env`, not
+committed) and fall back to `Config.slack_webhook_url`. The node continues on
+error and the next Events row records `slack sent` or `slack failed: …`, so
+whether an alert was *delivered* is a fact in the log, not an assumption. The
+first two WF-4 runs on 2026-10-24 logged `slack failed: URL parameter cannot be
+empty`; the third logged `slack sent`. Both are kept.
 
 **Every branch ends in a log node, including the ones that stop.** A rejected
 guard verdict, an unknown envelope, a replayed webhook — each writes its
@@ -449,9 +469,10 @@ set -a && source .env.warehouse.local && set +a
 python -m warehouse.migrate && pytest -m warehouse -v
 ```
 
-## Known limitation: the intake webhook is unauthenticated
+## Known limitation: WF-1 and WF-3 webhooks are unauthenticated
 
-`POST /webhook/intake` accepts anything. In this build that is deliberate — it
+WF-4 is signed (see below). WF-1 and WF-3 are not, and neither is deployed on
+the production host. `POST /webhook/intake` accepts anything. In this build that is deliberate — it
 keeps the test suite and the demo simple — but it means anyone who learns the
 URL can create Notion rows and, worse, spend Anthropic credits: every new
 candidate is an LLM call. That is why no tracked file in this repository
@@ -471,6 +492,52 @@ carries a known envelope id. Note what the idempotency check does *not* do:
 it stops a replay from creating a second contact, but it does not stop a
 forged completion for an envelope that was never signed. Those are different
 problems and only one of them is solved here.
+
+## WF-4 in production
+
+```
+browser ── form ──▶ Cloudflare Worker ── HMAC-signed ──▶ ngrok static domain ──▶ n8n (Docker, Windows PC)
+                     │  serves the page                                          │
+                     │  hashes the sender IP                                     ├─ Verify   signature + 5-min replay window
+                     │  5-min health check ──▶ Slack on down/up                  ├─ Screen   honeypot, fill time, links, repeat sender
+                     └─ /api/status (uptime record)                              ├─ Claude   label proposal (untrusted)
+                                                                                 ├─ Guard    guard.js rules, inquiry labels
+                                                                                 ├─ Notion   every signed request is a row, spam included
+                                                                                 └─ Slack    anything that is not spam
+```
+
+**Why a relay.** The form is a static page, so it cannot keep a secret, and an
+unauthenticated webhook lets anyone who finds the URL spend Anthropic credit.
+The Worker keeps `INQUIRY_SECRET`, signs `${timestamp}.${payload}`, and the
+Verify node recomputes it; an unsigned or replayed request gets a 401 and never
+reaches the model. `test_relay.py` runs the real Worker module and checks its
+output with the real n8n verifier, so the two halves cannot drift apart.
+
+**Why spam is stored, not dropped.** A filtered request that vanishes cannot be
+counted. Every signed request becomes an Inquiries row with a `Spam Reason`, so
+"N requests, M screened, K real" is a query, not an estimate.
+
+**Why the host is a PC.** It is free and it will go down, which is the point:
+the Worker's Cron Trigger checks `/healthz` from outside every 5 minutes, two
+misses declare an outage, and Slack hears exactly twice per outage — down, and
+back up with the duration. `/api/status` serves checks, failed checks, incidents
+and total minutes down.
+
+**First live run (2026-10-24).** Claude labelled a 102-character inquiry
+correctly and quoted a 66-character clause; the guard rejected it, because
+guard.js caps quotes at 40% of the source from 100 characters on — a rule tuned
+for multi-paragraph applications. Inquiries now get the 40% cap only from 250
+characters, an 80% cap below that (so quoting the whole message still fails),
+and the exact message is a regression test (`test_I3_a_short_inquiry…`).
+
+### Operations log
+
+Filled in weekly from the Events table and `/api/status`. Test traffic is
+counted separately and never reported as inquiries.
+
+| Week | Requests (signed) | Rejected unsigned | Spam: screen / model | Real inquiries | Workflow errors | Outages / minutes down | Anthropic cost |
+|---|---|---|---|---|---|---|---|
+| 2026-10-24 (setup) | 5 test | 1 test probe | 0 / 0 | 0 | 0 | monitoring started | < $0.01 |
 
 ## Notion schema notes
 

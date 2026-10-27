@@ -25,7 +25,7 @@ offline suite exercises it with no credentials and no network.
 | WF-3 completion — idempotency, retry, alert row | **live** against a real Xero organisation |
 | WF-0 error handler | **live**; it caught a real credential failure during setup. Since 2026-10-24 it is WF-4's error workflow and delivers to Slack |
 | WF-4 inquiry form — signature, spam screen, Claude label, guard, Notion, Slack | **in production since 2026-10-24** on self-hosted n8n; first live run found a guard rule that rejected good labels on short messages (fixed, regression-tested) |
-| Cloudflare relay + uptime monitor | **live**; the form, the HMAC signing and a 5-minute outside health check run on one Worker |
+| Cloudflare relay + uptime monitor | **live**; the form, the HMAC signing and a 5-minute outside health check run on one Worker. Since 2026-10-27 the page is served on the business domain as well as workers.dev (Worker custom domain, `routes` in wrangler.toml); the page copy now describes the offer, and the studio is named Lampas |
 | WF-5 spam digest | **live since 2026-10-27**, daily at 09:00 Seoul; a test run the same day queried Notion, posted "nothing screened" to Slack and logged its Events row. First scheduled run 2026-10-28 |
 | Held-inquiry queue (Cloudflare KV) | **live since 2026-10-27**, added after the first three days measured 37% uptime; offline-tested (an 8-hour outage, nothing lost) and live-tested the same day (held 14 min, delivered on recovery) |
 | PostgreSQL warehouse layer — migrations, immutable loads, role isolation | **live on Azure**; 20 rows → 14 candidates + 6 flagged, `pytest -m warehouse` 9 passed against an Entra-only Flexible Server |

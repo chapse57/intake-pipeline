@@ -3,9 +3,19 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Ether — Contact</title>
-<meta name="description" content="Ether builds data collection, data pipelines, workflow automation and LLM features. Send an inquiry.">
+<title>Lampas — A contact form setup that tells you when it breaks</title>
+<meta name="description" content="I set up form intake for web agencies and small B2B firms. It runs on this page first, so you can try it yourself.">
 <meta name="robots" content="index, follow">
+<link rel="canonical" href="https://lampasworks.com/">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://lampasworks.com/">
+<meta property="og:site_name" content="Lampas">
+<meta property="og:title" content="Lampas — A contact form setup that tells you when it breaks">
+<meta property="og:description" content="I set up form intake for web agencies and small B2B firms. It runs on this page first, so you can try it yourself.">
+<meta property="og:image" content="https://lampasworks.com/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="627">
+<meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Ccircle cx='24' cy='24' r='22' fill='%232563EB'/%3E%3Cellipse cx='24' cy='24' rx='15' ry='6.5' fill='none' stroke='white' stroke-width='2.4' transform='rotate(-25 24 24)'/%3E%3Ccircle cx='24' cy='24' r='4.5' fill='white'/%3E%3Ccircle cx='37.3' cy='17.6' r='2.6' fill='%2393C5FD'/%3E%3C/svg%3E">
 <style>
   :root {
@@ -37,6 +47,8 @@
   .what b { font-weight: 600; }
   .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--blue); flex: none; transform: translateY(-1px); }
   .what span.d { color: var(--muted); }
+  .proof { color: var(--muted); font-size: 15px; margin: 28px 0 0; max-width: 34em; }
+  .proof a { color: var(--blue); }
   .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 28px; }
   .card h2 { font-size: 20px; margin: 0 0 4px; }
   .card .sub { color: var(--muted); margin: 0 0 22px; font-size: 15px; }
@@ -73,30 +85,32 @@
       <circle cx="24" cy="24" r="4.5" fill="#fff"/>
       <circle cx="37.3" cy="17.6" r="2.6" fill="#93C5FD"/>
     </svg>
-    <span class="word">ETHER</span>
+    <span class="word">LAMPAS</span>
   </header>
 
   <div class="grid">
     <section>
-      <h1>Data pipelines and workflow automation, built to keep running.</h1>
-      <p class="lede">Ether is a software studio in Seoul. Tell me what needs to be collected, moved or automated, and I will reply personally by email.</p>
+      <h1>A contact form setup that tells you when it breaks.</h1>
+      <p class="lede">I set up form intake for web agencies and small B2B firms. It runs on this page first, so you can try it yourself.</p>
       <ul class="what">
-        <li><span class="dot"></span><span><b>Data collection</b> <span class="d">— scheduled scraping and API pulls</span></span></li>
-        <li><span class="dot"></span><span><b>Pipelines</b> <span class="d">— ETL into sheets, databases and warehouses</span></span></li>
-        <li><span class="dot"></span><span><b>Automation</b> <span class="d">— n8n workflows across your tools</span></span></li>
-        <li><span class="dot"></span><span><b>LLM features</b> <span class="d">— classification and retrieval with guardrails</span></span></li>
+        <li><span class="dot"></span><span><b>Saved first</b> <span class="d">— every inquiry is stored in Notion before anything else runs</span></span></li>
+        <li><span class="dot"></span><span><b>Spam screened</b> <span class="d">— unclear ones go to review, not the bin</span></span></li>
+        <li><span class="dot"></span><span><b>Alerts</b> <span class="d">— a Slack message for each new inquiry</span></span></li>
+        <li><span class="dot"></span><span><b>Held during outages</b> <span class="d">— delivered when the backend is back</span></span></li>
+        <li><span class="dot"></span><span><b>Watched from outside</b> <span class="d">— a health check every 5 minutes, down and back-up alerts, a daily spam digest</span></span></li>
       </ul>
+      <p class="proof">Build notes and the operations log are on <a href="https://github.com/chapse57/intake-pipeline">GitHub</a>.</p>
     </section>
 
     <section class="card">
       <h2>Send an inquiry</h2>
-      <p class="sub">A few sentences about the job is enough.</p>
+      <p class="sub">Where do your leads come from, and where should they go?</p>
       <form id="f" novalidate>
         <div class="row">
           <div class="field"><label for="name">Name</label><input id="name" name="name" autocomplete="name" required maxlength="200"></div>
           <div class="field"><label for="email">Email</label><input id="email" name="email" type="email" autocomplete="email" required maxlength="320"></div>
         </div>
-        <div class="field"><label for="message">What do you need?</label><textarea id="message" name="message" required maxlength="5000" placeholder="e.g. Collect prices from 30 supplier sites into a Google Sheet every morning."></textarea></div>
+        <div class="field"><label for="message">What do you need?</label><textarea id="message" name="message" required maxlength="5000" placeholder="e.g. We run 12 client sites on Webflow. Form leads go to a shared inbox and sometimes nobody sees them."></textarea></div>
         <div class="row">
           <div class="field"><label for="budget">Budget <span class="opt">(optional)</span></label><input id="budget" name="budget" maxlength="200"></div>
           <div class="field"><label for="timeline">Timeline <span class="opt">(optional)</span></label><input id="timeline" name="timeline" maxlength="200"></div>
@@ -109,7 +123,7 @@
     </section>
   </div>
 
-  <footer>© 2026 Ether · Seoul</footer>
+  <footer>© 2026 Lampas · Seoul</footer>
 </div>
 <script>
   // Opened-at time travels with the form: a bot that posts within a few

@@ -2,6 +2,15 @@ name = "ether-inquiry"
 main = "inquiry-relay.js"
 compatibility_date = "2026-10-01"
 
+# Served on the business domain (registered on this Cloudflare account, so
+# Cloudflare creates the DNS records) and still on workers.dev, which the
+# README and the status links point to.
+workers_dev = true
+routes = [
+  { pattern = "lampasworks.com", custom_domain = true },
+  { pattern = "www.lampasworks.com", custom_domain = true },
+]
+
 # The inquiry page (public/index.html) is served as a static asset;
 # anything that is not a file (POST /api/inquiry) reaches the Worker.
 [assets]

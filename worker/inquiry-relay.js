@@ -10,6 +10,10 @@
  * What it deliberately does NOT do: spam filtering. That runs in n8n, so
  * every bot attempt is stored and counted rather than vanishing here.
  *
+ * When n8n is down (the PC is off at night), the inquiry is held in KV and
+ * the sender is told it arrived; the 5-minute health check delivers it,
+ * signed afresh, once n8n answers again (queue.js).
+ *
  * The inquiry page itself is a static asset of this same Worker
  * (public/index.html), so the form posts same-origin to /api/inquiry.
  *
@@ -20,22 +24,11 @@
  */
 
 import { runCheck, status } from './monitor.js';
+import { forward, sha256Hex } from './forward.js';
+import { enqueue } from './queue.js';
 
 const MAX_BODY = 20_000;
 const FIELDS = ['name', 'email', 'message', 'budget', 'timeline', 'website'];
-
-const enc = new TextEncoder();
-const hex = (buf) => [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
-
-async function hmacHex(secret, message) {
-  const key = await crypto.subtle.importKey('raw', enc.encode(secret),
-    { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
-  return hex(await crypto.subtle.sign('HMAC', key, enc.encode(message)));
-}
-
-async function sha256Hex(s) {
-  return hex(await crypto.subtle.digest('SHA-256', enc.encode(s)));
-}
 
 function reply(body, status, cors) {
   return new Response(JSON.stringify(body), {
@@ -89,34 +82,29 @@ export default {
     for (const f of FIELDS) clean[f] = typeof form[f] === 'string' ? form[f].slice(0, 6000) : '';
     clean.opened_at = Number.isFinite(Number(form.opened_at)) ? Number(form.opened_at) : null;
     clean.client = client;
+    // When the relay got it, not when n8n finally saw it: a held inquiry is
+    // screened (fill time) and dated (Notion "Received") by this moment.
+    clean.received_at = Date.now();
 
     const payload = JSON.stringify(clean);
-    const ts = String(Date.now());
-    const signature = await hmacHex(env.INQUIRY_SECRET, ts + '.' + payload);
+    const r = await forward(env, payload, upstream);
+    if (r.delivered) return reply({ ok: true }, 200, cors);
 
-    let res;
-    try {
-      res = await upstream(env.N8N_WEBHOOK_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Ether-Timestamp': ts,
-          'X-Ether-Signature': signature,
-          'ngrok-skip-browser-warning': '1',
-        },
-        body: JSON.stringify({ payload }),
-      });
-    } catch (e) {
-      console.log('upstream unreachable', String(e));
+    if (r.down) {
+      console.log('upstream down', r.status, r.error || '');
+      if (env.STATUS) {
+        try {
+          if (await enqueue(env, payload)) return reply({ ok: true, queued: true }, 202, cors);
+          console.log('queue full');
+        } catch (e) {
+          console.log('queue write failed', String(e));
+        }
+      }
       return reply({ ok: false, error: 'unavailable' }, 503, cors);
     }
-
-    // ngrok answers 404 when the tunnel is down (PC off). That is downtime,
-    // not a bad request: the page shows the fallback email address.
-    if (res.status === 404 || res.status >= 500) {
-      console.log('upstream down', res.status);
-      return reply({ ok: false, error: 'unavailable' }, 503, cors);
-    }
-    return reply({ ok: res.ok }, res.ok ? 200 : 400, cors);
+    // n8n is up and refused it (401 after a secret mismatch, 400): a config
+    // problem, not downtime, so it is not queued to fail again later.
+    console.log('upstream refused', r.status);
+    return reply({ ok: false }, 400, cors);
   },
 };

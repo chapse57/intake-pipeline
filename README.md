@@ -8,7 +8,9 @@ Since 2026-10-24 the same guard pattern also runs **in production** behind a
 public contact form (WF-4): a signed relay on Cloudflare, a free spam screen,
 Claude proposes a label, the guard decides whether to believe it, Notion stores
 every request (spam included), Slack is told about the rest, and an outside
-health check records every outage. See [WF-4 in production](#wf-4-in-production).
+health check records every outage. The host is a PC that is switched off at
+night, so the relay holds inquiries that arrive while it is down and delivers
+them when it is back. See [WF-4 in production](#wf-4-in-production).
 
 Everything here is checkable. The workflows are exported as importable JSON,
 the JavaScript in this repo *is* the JavaScript the n8n Code nodes run, and the
@@ -24,6 +26,7 @@ offline suite exercises it with no credentials and no network.
 | WF-0 error handler | **live**; it caught a real credential failure during setup. Since 2026-10-24 it is WF-4's error workflow and delivers to Slack |
 | WF-4 inquiry form — signature, spam screen, Claude label, guard, Notion, Slack | **in production since 2026-10-24** on self-hosted n8n; first live run found a guard rule that rejected good labels on short messages (fixed, regression-tested) |
 | Cloudflare relay + uptime monitor | **live**; the form, the HMAC signing and a 5-minute outside health check run on one Worker |
+| Held-inquiry queue (Cloudflare KV) | **live since 2026-10-27**, added after the first three days measured 37% uptime; offline-tested (an 8-hour outage, nothing lost) and live-tested the same day (held 14 min, delivered on recovery) |
 | PostgreSQL warehouse layer — migrations, immutable loads, role isolation | **live on Azure**; 20 rows → 14 candidates + 6 flagged, `pytest -m warehouse` 9 passed against an Entra-only Flexible Server |
 
 The four steps have also run as one chain, which is a different claim: a
@@ -56,6 +59,8 @@ n8n/
 worker/
   public/index.html   the public inquiry form
   inquiry-relay.js    Cloudflare Worker: serves the form, signs and forwards it to n8n
+  forward.js          signs at send time and posts to the n8n webhook
+  queue.js            holds inquiries in KV while n8n is down; the health check delivers them
   monitor.js          5-minute health check of n8n; Slack on down/up; /api/status
 deploy/
   docker-compose.yml  self-hosted n8n (free Community edition) + ngrok static domain
@@ -73,7 +78,7 @@ warehouse/
   conn.py             admin / loader / analyst identities; password or Entra token
   azure/provision.sh  the Azure resources as az commands
 docs/warehouse.md     ERD + data dictionary
-tests/                T1–T12, W1–W9, I1–I5 (inquiry), R1–R3 / M1–M2 (relay, monitor),
+tests/                T1–T12, W1–W9, I1–I5 (inquiry), R1–R5 / M1–M3 (relay, queue, monitor),
                       plus structural checks on the workflow files
 ```
 
@@ -499,10 +504,10 @@ problems and only one of them is solved here.
 browser ── form ──▶ Cloudflare Worker ── HMAC-signed ──▶ ngrok static domain ──▶ n8n (Docker, Windows PC)
                      │  serves the page                                          │
                      │  hashes the sender IP                                     ├─ Verify   signature + 5-min replay window
-                     │  5-min health check ──▶ Slack on down/up                  ├─ Screen   honeypot, fill time, links, repeat sender
-                     └─ /api/status (uptime record)                              ├─ Claude   label proposal (untrusted)
-                                                                                 ├─ Guard    guard.js rules, inquiry labels
-                                                                                 ├─ Notion   every signed request is a row, spam included
+                     │  n8n down? holds it in KV, sender still sees "received"   ├─ Screen   honeypot, fill time, links, repeat sender
+                     │  5-min health check ──▶ Slack on down/up                  ├─ Claude   label proposal (untrusted)
+                     │    then delivers held inquiries, signed again             ├─ Guard    guard.js rules, inquiry labels
+                     └─ /api/status (uptime + queue record)                      ├─ Notion   every signed request is a row, spam included
                                                                                  └─ Slack    anything that is not spam
 ```
 
@@ -527,8 +532,46 @@ and total minutes down.
 correctly and quoted a 66-character clause; the guard rejected it, because
 guard.js caps quotes at 40% of the source from 100 characters on — a rule tuned
 for multi-paragraph applications. Inquiries now get the 40% cap only from 250
-characters, an 80% cap below that (so quoting the whole message still fails),
-and the exact message is a regression test (`test_I3_a_short_inquiry…`).
+characters and an 80% cap from 100 to 249 (so quoting the whole message
+fails); below 100 characters only the 300-character cap applies, so a
+one-line message can be quoted almost whole. The exact message is a regression
+test (`test_I3_a_short_inquiry…`).
+
+**Why inquiries are held, not refused (added 2026-10-27).** The first three
+days put numbers on "it will go down": 783 checks, 37% answered, 9 outages,
+2,465 minutes down, most of it overnight because the PC is switched off. Until
+then an inquiry sent during an outage got "the form is offline, try later",
+which in practice means lost. Now the Worker keeps it in KV and the sender sees
+the normal "received".
+
+- Each health check that finds n8n up delivers held inquiries oldest first,
+  **signed again at send time**: the 5-minute replay window would refuse the
+  original signature, and replaying it is exactly what the window exists to stop.
+- It stops at the first one that does not go through, so a tunnel that drops
+  mid-run keeps the rest. One that n8n keeps refusing while it is up is moved
+  aside after five tries instead of blocking everything behind it.
+- Delivery is at-least-once: a lost reply can cause a duplicate row, never a
+  lost inquiry.
+- The relay stamps `received_at`. Fill time, the repeat-sender window and
+  Notion's `Received` date all use it, so an inquiry held 30 hours is not
+  screened as a stale form, and four held from one sender still count as four.
+- At most 20 wait at once, and `/api/status` never lists keys: the free KV tier
+  allows 1,000 writes and 1,000 lists a day, shared with the uptime record, and
+  a bot posting all night must not be able to spend them.
+
+`test_M3_overnight_outage_loses_nothing` runs the whole case: n8n goes down, an
+inquiry arrives, eight hours later the check finds n8n up, delivers it with a
+fresh signature, and Slack's "back up" message says one held inquiry went
+through.
+
+**Queue live test (2026-10-27).** The tunnel container was stopped on
+purpose and one test inquiry sent through the public page at 08:46. The
+sender saw "Thanks"; `/api/status` showed one waiting. Three checks failed
+(Slack: "n8n unreachable since 08:45"). The tunnel came back at 08:56; the
+09:00 check delivered it after 14 minutes, n8n ran it end to end in 5 seconds
+(screen passed, label `other` at 0.95, guard accepted), the Notion row is dated
+08:46, the send time, and Slack said "back up … after 15 min · 1 inquiry(s)
+held during the outage delivered".
 
 ### Operations log
 
@@ -538,6 +581,11 @@ counted separately and never reported as inquiries.
 | Week | Requests (signed) | Rejected unsigned | Spam: screen / model | Real inquiries | Workflow errors | Outages / minutes down | Anthropic cost |
 |---|---|---|---|---|---|---|---|
 | 2026-10-24 (setup) | 4 test | 1 test probe | 0 / 0 | 0 | 0 | monitoring started | < $0.01 |
+| 2026-10-24 → 10-27 | 0 | 0 | 0 / 0 | 0 | 0 | 9 / 2,465 (37% of checks up; PC off at night) | $0 |
+| 2026-10-27 (queue test) | 1 test | 0 | 0 / 0 | 0 | 0 | 1 / 15, deliberate | < $0.01 |
+
+Week one had no traffic because the page is not linked from anywhere yet; what
+it did produce is the outage record above, which is why the queue exists.
 
 ## Notion schema notes
 

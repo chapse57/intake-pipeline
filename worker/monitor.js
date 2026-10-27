@@ -8,7 +8,12 @@
  * when it comes back, with the duration. /api/status serves the record.
  *
  * transition() is pure so the rules are tested without a network or KV.
+ *
+ * Whenever a check finds n8n up, inquiries held during downtime are
+ * delivered (queue.js). The "back up" Slack notice says how many.
  */
+
+import { deliverQueue, readStats, waitingFrom } from './queue.js';
 
 export const FAILS_TO_DECLARE_DOWN = 2;   // one missed check is a blip, two is an outage
 export const MAX_INCIDENTS = 200;
@@ -72,6 +77,13 @@ export async function runCheck(env, now = Date.now(), upstream = fetch) {
   const { next, event } = transition(prev, ok, now);
   await env.STATUS.put('state', JSON.stringify(next));
 
+  // n8n answers again: hand over anything held while it was away
+  let queue = null;
+  if (ok && env.INQUIRY_SECRET && env.N8N_WEBHOOK_URL) {
+    try { queue = await deliverQueue(env, now, upstream); }
+    catch (e) { console.log('queue delivery failed', String(e)); }
+  }
+
   if (event) {
     if (event.type === 'up') {
       const list = JSON.parse((await env.STATUS.get('incidents')) || '[]');
@@ -81,7 +93,8 @@ export async function runCheck(env, now = Date.now(), upstream = fetch) {
     if (env.SLACK_WEBHOOK_URL) {
       const text = event.type === 'down'
         ? `:red_circle: n8n unreachable since ${kst(event.down_at)} (2 missed health checks)`
-        : `:large_green_circle: n8n back up at ${kst(event.up_at)} after ${event.minutes} min`;
+        : `:large_green_circle: n8n back up at ${kst(event.up_at)} after ${event.minutes} min`
+          + (queue && queue.delivered ? ` · ${queue.delivered} inquiry(s) held during the outage delivered` : '');
       try {
         await upstream(env.SLACK_WEBHOOK_URL, {
           method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }),
@@ -89,7 +102,7 @@ export async function runCheck(env, now = Date.now(), upstream = fetch) {
       } catch { /* the KV record is the source of truth; Slack is the notice */ }
     }
   }
-  return { ok, next, event };
+  return { ok, next, event, queue };
 }
 
 export async function status(env) {
@@ -103,5 +116,13 @@ export async function status(env) {
     check_uptime_pct: s.checks ? Math.round((1 - s.failed_checks / s.checks) * 10000) / 100 : null,
     incidents: incidents.length, total_down_minutes: downMinutes,
     recent_incidents: incidents.slice(-20),
+    queue: await queueStatus(env),
   };
+}
+
+async function queueStatus(env) {
+  const st = await readStats(env);
+  return { waiting: waitingFrom(st), held_total: st.queued_total, delivered_total: st.delivered_total,
+           dead_total: st.dead_total, longest_wait_minutes: st.longest_wait_minutes,
+           last_delivered_at: st.last_delivered_at };
 }

@@ -104,6 +104,9 @@ function normalizeInquiry(form) {
     honeypot: clean(f.website, 500),
     opened_at: f.opened_at == null ? null : Number(f.opened_at),
     client: clean(f.client, 64),
+    // set by the relay when it got the form; an inquiry held while n8n was
+    // down arrives hours later and must not look like a day-old replayed form
+    received_at: Number.isFinite(Number(f.received_at)) && f.received_at != null ? Number(f.received_at) : null,
   };
 }
 
@@ -115,6 +118,9 @@ const LINK_RE = /(https?:\/\/|www\.)/gi;
  * filled honeypot is certain, a link count is a heuristic. Spam is not
  * dropped — it is stored with this reason so it can be counted.
  *
+ * Fill time is measured to when the relay received the form (received_at),
+ * falling back to now for a request without it.
+ *
  * @param {object} inq            output of normalizeInquiry
  * @param {number} nowMs
  * @param {number} recentFromClient rows from the same client hash in the last 10 min
@@ -124,7 +130,8 @@ function screenSpam(inq, nowMs, recentFromClient) {
   if (inq.honeypot) return hit('honeypot');
   if (!EMAIL_RE.test(inq.email)) return hit('bad_email');
   if (inq.opened_at == null || !Number.isFinite(inq.opened_at)) return hit('no_open_time');
-  const fill = nowMs - inq.opened_at;
+  const at = Number.isFinite(inq.received_at) ? inq.received_at : nowMs;
+  const fill = at - inq.opened_at;
   if (fill < MIN_FILL_MS) return hit('too_fast', fill);
   if (fill > MAX_FILL_MS) return hit('stale_form', fill);
   if (inq.message.length < MIN_MESSAGE_CHARS) return hit('message_too_short', inq.message.length);

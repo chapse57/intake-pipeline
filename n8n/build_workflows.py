@@ -769,7 +769,9 @@ return [{ json: { auth_ok: auth.ok && !parseError, auth_reason: parseError || au
     client_js = f"({V}.form && {V}.form.client ? String({V}.form.client) : '__none__')"
     w.notion_query("Recent from client", "notion_inquiries_db",
                    f"{{ and: [ {{ property: 'Client', rich_text: {{ equals: {client_js} }} }},"
-                   " { property: 'Received', date: { on_or_after: new Date(Date.now() - 600000).toISOString() } } ] }",
+                   # 10 minutes before the sender pressed send, not before delivery:
+                   # inquiries held overnight arrive together hours later
+                   f" {{ property: 'Received', date: {{ on_or_after: new Date((Number({V}.form && {V}.form.received_at) || Date.now()) - 600000).toISOString() }} }} ] }}",
                    (1320, 0))
 
     w.code("Screen", INQ + """
@@ -855,7 +857,7 @@ const properties = {
   Status: { select: { name: status } },
   'Spam Reason': rt(spamReason),
   Client: rt(s.client),
-  Received: { date: { start: new Date().toISOString() } },
+  Received: { date: { start: new Date(s.received_at || Date.now()).toISOString() } },
   'Run ID': rt($execution.id),
 };
 return [{ json: { status, label, spam_reason: spamReason, name: s.name, email: s.email,

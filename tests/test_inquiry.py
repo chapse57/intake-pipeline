@@ -128,6 +128,25 @@ def test_I2_honeypot_wins_over_every_other_reason(run_inquiry):
     assert r["reason"] == "honeypot", "the certain signal must be the one recorded"
 
 
+def test_I2_an_inquiry_held_overnight_is_not_a_stale_form(run_inquiry):
+    """The relay holds inquiries while n8n is down and stamps when it got them.
+    Fill time is measured to that stamp, so delivery 30 hours later is not
+    mistaken for a day-old form being replayed by a bot."""
+    opened = NOW - 90_000
+    held = dict(GOOD_FORM, opened_at=opened, received_at=opened + 60_000)
+    r = run_inquiry([{"id": "x", "op": "screen", "form": held, "now": NOW + 30 * 3600 * 1000}])["x"]
+    assert r["spam"] is False, r
+    no_stamp = dict(GOOD_FORM, opened_at=opened)
+    r = run_inquiry([{"id": "x", "op": "screen", "form": no_stamp, "now": NOW + 30 * 3600 * 1000}])["x"]
+    assert r["reason"] == "stale_form", "without the relay's stamp the old rule still applies"
+
+
+def test_I2_a_too_fast_bot_is_still_caught_when_held(run_inquiry):
+    held = dict(GOOD_FORM, opened_at=NOW - 1_000, received_at=NOW)
+    r = run_inquiry([{"id": "x", "op": "screen", "form": held, "now": NOW + 8 * 3600 * 1000}])["x"]
+    assert r["reason"] == "too_fast", "holding must not launder a 1-second submission"
+
+
 def test_I2_normalisation_lowercases_email_and_flags_truncation(run_inquiry):
     n = run_inquiry([{"id": "n", "op": "normalize",
                       "form": dict(GOOD_FORM, message="y" * 2500)}])["n"]
@@ -272,6 +291,36 @@ def test_I5_build_node_writes_spam_rows_without_calling_the_guard(wf4):
     assert props["Label"] == {"select": {"name": "spam"}}
     assert props["Spam Reason"]["rich_text"][0]["text"]["content"] == "honeypot"
     assert out["payload"]["parent"]["database_id"] == "DB"
+
+
+def test_I5_build_node_dates_a_held_inquiry_by_when_it_was_received(wf4):
+    received = 1_800_000_000_000
+    screen_out = {"name": "Dana", "email": "d@x.io", "message": MSG, "message_stored": MSG,
+                  "message_truncated": False, "budget": "", "timeline": "", "client": "c",
+                  "received_at": received, "screen": {"spam": True, "reason": "honeypot", "detail": None}}
+    out = _run_node_js(wf4["Build inquiry"]["parameters"]["jsCode"],
+                       {"Config": {"notion_inquiries_db": "DB"}, "Screen": screen_out})
+    import datetime
+    want = datetime.datetime.fromtimestamp(received / 1000, datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
+    assert out["payload"]["properties"]["Received"]["date"]["start"].startswith(want), \
+        "Notion shows when the sender sent it, not when the PC woke up"
+
+
+def test_I5_repeat_sender_window_ends_when_the_sender_pressed_send(wf4):
+    """Four inquiries from one sender held overnight arrive together hours later.
+    The 10-minute window has to be counted back from each one's send time, or a
+    burst held during an outage is never seen as a burst."""
+    body = wf4["Recent from client"]["parameters"]["jsonBody"]
+    assert body.startswith("={{") and body.endswith("}}")
+    received = 1_800_000_000_000
+    program = ("const $ = () => ({ first: () => ({ json: { form: { client: 'c1', received_at: %d } } }) });\n"
+               "process.stdout.write(%s);") % (received, body[3:-2])
+    proc = subprocess.run(["node", "-e", program], capture_output=True, text=True)
+    assert proc.returncode == 0, proc.stderr
+    since = json.loads(proc.stdout)["filter"]["and"][1]["date"]["on_or_after"]
+    import datetime
+    want = datetime.datetime.fromtimestamp((received - 600_000) / 1000, datetime.timezone.utc)
+    assert since.startswith(want.strftime("%Y-%m-%dT%H:%M:%S"))
 
 
 def test_I5_build_node_keeps_a_rejected_label_as_review(wf4):

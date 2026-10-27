@@ -26,6 +26,7 @@ offline suite exercises it with no credentials and no network.
 | WF-0 error handler | **live**; it caught a real credential failure during setup. Since 2026-10-24 it is WF-4's error workflow and delivers to Slack |
 | WF-4 inquiry form — signature, spam screen, Claude label, guard, Notion, Slack | **in production since 2026-10-24** on self-hosted n8n; first live run found a guard rule that rejected good labels on short messages (fixed, regression-tested) |
 | Cloudflare relay + uptime monitor | **live**; the form, the HMAC signing and a 5-minute outside health check run on one Worker |
+| WF-5 spam digest | **live since 2026-10-27**, daily at 09:00 Seoul; a test run the same day queried Notion, posted "nothing screened" to Slack and logged its Events row. First scheduled run 2026-10-28 |
 | Held-inquiry queue (Cloudflare KV) | **live since 2026-10-27**, added after the first three days measured 37% uptime; offline-tested (an 8-hour outage, nothing lost) and live-tested the same day (held 14 min, delivered on recovery) |
 | PostgreSQL warehouse layer — migrations, immutable loads, role isolation | **live on Azure**; 20 rows → 14 candidates + 6 flagged, `pytest -m warehouse` 9 passed against an Entra-only Flexible Server |
 
@@ -49,13 +50,15 @@ n8n/
   normalize.js        email/phone normalization + duplicate classification
   guard.js            the deterministic check on the model's role proposal
   inquiry.js          WF-4: relay signature check, spam screen, label guard
-  build_workflows.py  emits the five workflow files below
+  digest.js           WF-5: the daily spam digest window and Slack text
+  build_workflows.py  emits the six workflow files below
   workflows/
     WF-0_error_handler.json   Error Trigger → Events row → Slack
     WF-1_intake.json          webhook → normalize → 3 lookups → classify → Claude → guard → Notion
     WF-2_dispatch.json        poll Approved+unsent → Switch(role) → DocuSign → mark Sent
     WF-3_complete.json        DocuSign webhook → idempotency → Xero (explicit 3× retry) → Onboarded
     WF-4_inquiry.json         signed webhook → spam screen → Claude → guard → Notion → Slack
+    WF-5_spam_digest.json     09:00 daily → Spam rows since the last digest → Slack
 worker/
   public/index.html   the public inquiry form
   inquiry-relay.js    Cloudflare Worker: serves the form, signs and forwards it to n8n
@@ -78,7 +81,8 @@ warehouse/
   conn.py             admin / loader / analyst identities; password or Entra token
   azure/provision.sh  the Azure resources as az commands
 docs/warehouse.md     ERD + data dictionary
-tests/                T1–T12, W1–W9, I1–I5 (inquiry), R1–R5 / M1–M3 (relay, queue, monitor),
+tests/                T1–T12, W1–W9, I1–I5 (inquiry), D1–D3 (spam digest),
+                      R1–R5 / M1–M3 (relay, queue, monitor),
                       plus structural checks on the workflow files
 ```
 
@@ -504,11 +508,13 @@ problems and only one of them is solved here.
 browser ── form ──▶ Cloudflare Worker ── HMAC-signed ──▶ ngrok static domain ──▶ n8n (Docker, Windows PC)
                      │  serves the page                                          │
                      │  hashes the sender IP                                     ├─ Verify   signature + 5-min replay window
-                     │  n8n down? holds it in KV, sender still sees "received"   ├─ Screen   honeypot, fill time, links, repeat sender
+                     │  n8n down? holds it in KV, sender still sees "received"   ├─ Screen   honeypot, fill time, repeat sender; many links = suspect
                      │  5-min health check ──▶ Slack on down/up                  ├─ Claude   label proposal (untrusted)
                      │    then delivers held inquiries, signed again             ├─ Guard    guard.js rules, inquiry labels
                      └─ /api/status (uptime + queue record)                      ├─ Notion   every signed request is a row, spam included
-                                                                                 └─ Slack    anything that is not spam
+                                                                                 └─ Slack    anything that is not spam; suspects with a warning
+
+WF-5, 09:00 daily ──▶ Notion: Status = Spam, created since the last digest ──▶ Slack digest
 ```
 
 **Why a relay.** The form is a static page, so it cannot keep a secret, and an
@@ -521,6 +527,28 @@ output with the real n8n verifier, so the two halves cannot drift apart.
 **Why spam is stored, not dropped.** A filtered request that vanishes cannot be
 counted. Every signed request becomes an Inquiries row with a `Spam Reason`, so
 "N requests, M screened, K real" is a query, not an estimate.
+
+**Why many links is a warning, not spam (changed 2026-10-27).** The page's own
+example request is "prices from 30 supplier sites", and a client who pastes
+the URLs would have been screened as spam: no Slack, nobody looks. Now more
+than two links is a *suspicion*. The message still goes to Claude and the
+guard, is stored as **Review** with `Spam Reason: suspect: N links`, and Slack
+opens with `:warning: N links - could be spam, check before replying`. It is
+kept out of Slack only when the model also calls it spam, and a link-dropping
+flood is still stopped by the repeat-sender rule. Live test the same day: a
+request with three supplier URLs was labelled `data-collection` at 0.95,
+stored as Review with `suspect: 3 links`, and Slack led with the warning.
+
+**Why a daily spam digest (WF-5, added 2026-10-27).** Spam never reaches
+Slack, so a real client screened by mistake is silent. At 09:00 Seoul time
+WF-5 lists every row that became Spam since the last digest, tallied by reason,
+each with a Notion link, and says so when there was none, so silence means it
+did not run. n8n does not catch up a run missed while the PC was off; the
+window starts where the last *sent* digest ended, so the next morning covers
+the gap, and it only moves on once Slack accepted the post. Rows are selected
+by Notion's created time, not `Received`, because a held inquiry is created
+when it is delivered, and the window ends on a whole minute because Notion
+stores created time to the minute.
 
 **Why the host is a PC.** It is free and it will go down, which is the point:
 the Worker's Cron Trigger checks `/healthz` from outside every 5 minutes, two
@@ -582,7 +610,7 @@ counted separately and never reported as inquiries.
 |---|---|---|---|---|---|---|---|
 | 2026-10-24 (setup) | 4 test | 1 test probe | 0 / 0 | 0 | 0 | monitoring started | < $0.01 |
 | 2026-10-24 → 10-27 | 0 | 0 | 0 / 0 | 0 | 0 | 9 / 2,465 (37% of checks up; PC off at night) | $0 |
-| 2026-10-27 (queue test) | 1 test | 0 | 0 / 0 | 0 | 0 | 1 / 15, deliberate | < $0.01 |
+| 2026-10-27 (queue + link-rule tests) | 2 test | 0 | 0 / 0 | 0 | 0 | 1 / 15, deliberate | < $0.01 |
 
 Week one had no traffic because the page is not linked from anywhere yet; what
 it did produce is the outage record above, which is why the queue exists.

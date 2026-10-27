@@ -9,7 +9,8 @@ same JavaScript the n8n Code nodes run (n8n/inquiry.js):
   I1  signature  — only the Cloudflare relay can produce a request n8n accepts
   I2  screen     — free bot checks run before the model is paid for
   I3  guard      — the model's label is checked like WF-1's role is
-  I4  status     — spam is stored and counted, a rejected label is a Review
+  I4  status     — spam is stored and counted, a rejected label or a
+                   link-heavy message is a Review
   I5  the exported WF-4 nodes, executed with the n8n globals stubbed
 """
 import json
@@ -110,7 +111,6 @@ def test_I2_a_normal_inquiry_passes(run_inquiry):
     ({"opened_at": NOW - 2 * 24 * 3600 * 1000}, "stale_form"),
     ({"message": "hi"}, "message_too_short"),
     ({"message": "x" * 5001}, "message_too_long"),
-    ({"message": "see http://a.example http://b.example www.c.example"}, "too_many_links"),
 ])
 def test_I2_each_bot_signal_is_caught_with_its_reason(run_inquiry, over, reason):
     r = _screen(run_inquiry, **over)
@@ -121,6 +121,22 @@ def test_I2_the_fourth_send_in_ten_minutes_is_rate_limited(run_inquiry):
     assert _screen(run_inquiry, recent=2)["spam"] is False
     r = _screen(run_inquiry, recent=3)
     assert (r["reason"], r["detail"]) == ("rate_limited", 3)
+
+
+LINKY = "Prices from these: http://a.example/p http://b.example/p www.c.example/p, daily please."
+
+
+def test_I2_many_links_is_a_suspicion_not_spam(run_inquiry):
+    """The page's own example is "prices from 30 supplier sites". A client who
+    pastes the URLs must reach a person, flagged, not vanish into Spam."""
+    r = _screen(run_inquiry, message=LINKY)
+    assert (r["spam"], r["reason"], r["detail"]) == (False, "suspect_links", 3)
+    assert _screen(run_inquiry, message="one link http://a.example and www.b.example")["reason"] == "ok"
+
+
+def test_I2_a_link_dropping_flood_is_still_rate_limited(run_inquiry):
+    r = _screen(run_inquiry, recent=3, message=LINKY)
+    assert (r["spam"], r["reason"]) == (True, "rate_limited"), "a hard signal beats the suspicion"
 
 
 def test_I2_honeypot_wins_over_every_other_reason(run_inquiry):
@@ -231,10 +247,31 @@ def test_I3_an_injected_instruction_cannot_widen_the_label_set(run_inquiry):
     ({"spam": False}, {"verdict": "accept", "label": "pipeline"}, "New"),
     ({"spam": False}, {"verdict": "review", "label": "pipeline"}, "Review"),
     ({"spam": False}, {"verdict": "reject", "label": None}, "Review"),
+    # link-heavy: a person looks first, unless the model also calls it spam
+    ({"spam": False, "reason": "suspect_links", "detail": 3}, {"verdict": "accept", "label": "pipeline"}, "Review"),
+    ({"spam": False, "reason": "suspect_links", "detail": 3}, {"verdict": "accept", "label": "spam"}, "Spam"),
+    ({"spam": False, "reason": "ok", "detail": None}, {"verdict": "accept", "label": "pipeline"}, "New"),
 ])
 def test_I4_status_mapping(run_inquiry, screen, guard, status):
     r = run_inquiry([{"id": "t", "op": "status", "screen": screen, "guard": guard}])["t"]
     assert r["status"] == status
+
+
+@pytest.mark.parametrize("screen,guard,reason,suspect", [
+    ({"spam": True, "reason": "too_fast", "detail": 1200}, None, "too_fast (1200)", None),
+    ({"spam": True, "reason": "honeypot", "detail": None}, None, "honeypot", None),
+    ({"spam": False, "reason": "ok", "detail": None}, {"verdict": "accept", "label": "pipeline"}, "", None),
+    ({"spam": False, "reason": "ok", "detail": None}, {"verdict": "accept", "label": "spam"}, "model: spam", None),
+    ({"spam": False, "reason": "ok", "detail": None}, {"verdict": "reject", "reason": "evidence_not_in_source"},
+     "guard: evidence_not_in_source", None),
+    ({"spam": False, "reason": "suspect_links", "detail": 3}, {"verdict": "accept", "label": "pipeline"},
+     "suspect: 3 links", "3 links"),
+    ({"spam": False, "reason": "suspect_links", "detail": 4}, {"verdict": "review", "reason": "low_confidence"},
+     "suspect: 4 links; guard: low_confidence", "4 links"),
+])
+def test_I4_spam_reason_keeps_every_reason_that_applies(run_inquiry, screen, guard, reason, suspect):
+    r = run_inquiry([{"id": "r", "op": "reason", "screen": screen, "guard": guard}])["r"]
+    assert (r["reason"], r["suspect"]) == (reason, suspect)
 
 
 # --------------------------------------------------------------------------
@@ -334,6 +371,45 @@ def test_I5_build_node_keeps_a_rejected_label_as_review(wf4):
     assert out["status"] == "Review", "a rejected label must not drop the inquiry"
     assert out["payload"]["properties"]["Label"] == {"select": None}
     assert out["spam_reason"] == "guard: evidence_not_in_source"
+
+
+def test_I5_build_node_stores_a_link_heavy_inquiry_as_review(wf4):
+    screen_out = {"name": "Dana", "email": "d@x.io", "message": LINKY, "message_stored": LINKY,
+                  "message_truncated": False, "budget": "", "timeline": "", "client": "c",
+                  "screen": {"spam": False, "reason": "suspect_links", "detail": 3}}
+    guard_out = dict(screen_out, guard={"verdict": "accept", "label": "data-collection",
+                                        "evidence": "Prices from these", "confidence": 0.9, "reason": "ok",
+                                        "detail": None})
+    out = _run_node_js(wf4["Build inquiry"]["parameters"]["jsCode"],
+                       {"Config": {"notion_inquiries_db": "DB"}, "Screen": screen_out, "Guard": guard_out})
+    props = out["payload"]["properties"]
+    assert out["status"] == "Review" and props["Status"] == {"select": {"name": "Review"}}
+    assert props["Label"] == {"select": {"name": "data-collection"}}, "the label is kept for the reviewer"
+    assert props["Spam Reason"]["rich_text"][0]["text"]["content"] == "suspect: 3 links"
+    assert out["suspect"] == "3 links"
+
+
+def _slack_text(wf4, build_out):
+    body = wf4["Slack: new inquiry"]["parameters"]["jsonBody"]
+    nodes = {"Build inquiry": build_out, "Create inquiry": {"url": "https://notion.so/x"}}
+    # the excerpt has "…": node prints it as \\u2026 so the Windows locale
+    # (cp949) cannot garble it, and Python decodes as UTF-8 regardless
+    ascii_out = r"""const __ascii = (s) => s.replace(/[\u007f-\uffff]/g, (c) => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0'));"""
+    program = (f"globalThis.__nodes = {json.dumps(nodes)};\n" + STUBS + ascii_out
+               + f"\nprocess.stdout.write(__ascii({body[3:-2]}));")
+    proc = subprocess.run(["node", "-e", program], capture_output=True, text=True, encoding="utf-8")
+    assert proc.returncode == 0, proc.stderr
+    return json.loads(proc.stdout)["text"]
+
+
+def test_I5_slack_warns_first_when_an_inquiry_is_link_heavy(wf4):
+    base = {"status": "Review", "label": "data-collection", "name": "Dana", "email": "d@x.io",
+            "excerpt": "Prices from these…"}
+    warned = _slack_text(wf4, dict(base, suspect="3 links"))
+    assert warned.splitlines()[0] == ":warning: 3 links - could be spam, check before replying"
+    assert warned.splitlines()[1].startswith(":incoming_envelope: New inquiry - Review / data-collection")
+    plain = _slack_text(wf4, dict(base, status="New", suspect=None))
+    assert plain.startswith(":incoming_envelope: New inquiry - New /") and ":warning:" not in plain
 
 
 def test_I5_an_unsigned_request_never_reaches_the_model(wf4):

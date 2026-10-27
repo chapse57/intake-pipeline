@@ -32,14 +32,17 @@ const MIN_FILL_MS = 3000;                  // a person does not fill four fields
 const MAX_FILL_MS = 24 * 60 * 60 * 1000;   // a form open for a day is a replayed form
 const MIN_MESSAGE_CHARS = 10;
 const MAX_MESSAGE_CHARS = 5000;
+// More links than this is a suspicion, not a verdict: the page's own example
+// is "prices from 30 supplier sites", and a real client may paste the URLs.
 const MAX_LINKS = 2;
 const MAX_FROM_CLIENT_10MIN = 3;           // a 4th send inside 10 minutes is flooding
 const NOTION_TEXT_LIMIT = 1900;
 // Inquiries are short. guard.js applies its 40% quote cap from 100 chars,
 // tuned for multi-paragraph applications; on a two-line inquiry it rejects
 // a perfectly good clause (first live run: 66 of 102 chars). The char cap
-// still applies, a short message gets a looser 80% ratio (so quoting the
-// whole thing still fails), and the 40% ratio waits for 250 chars.
+// always applies; from 100 to 249 chars a looser 80% ratio (so quoting the
+// whole message fails); from 250 chars guard.js's 40%. Below 100 chars only
+// the char cap applies, so a one-line message can be quoted almost whole.
 const INQUIRY_RATIO_APPLIES_FROM = 250;
 const INQUIRY_SHORT_MAX_RATIO = 0.8;
 
@@ -118,6 +121,11 @@ const LINK_RE = /(https?:\/\/|www\.)/gi;
  * filled honeypot is certain, a link count is a heuristic. Spam is not
  * dropped — it is stored with this reason so it can be counted.
  *
+ * A link-heavy message is not spam here. It comes back { spam: false,
+ * reason: 'suspect_links', detail: n }: it still goes to the model, is
+ * stored as Review, and Slack hears about it with a warning. Only the model
+ * calling it spam (or a hard signal above) keeps it out of Slack.
+ *
  * Fill time is measured to when the relay received the form (received_at),
  * falling back to now for a request without it.
  *
@@ -136,10 +144,17 @@ function screenSpam(inq, nowMs, recentFromClient) {
   if (fill > MAX_FILL_MS) return hit('stale_form', fill);
   if (inq.message.length < MIN_MESSAGE_CHARS) return hit('message_too_short', inq.message.length);
   if (inq.message.length > MAX_MESSAGE_CHARS) return hit('message_too_long', inq.message.length);
-  const links = (inq.message.match(LINK_RE) || []).length;
-  if (links > MAX_LINKS) return hit('too_many_links', links);
   if ((recentFromClient || 0) >= MAX_FROM_CLIENT_10MIN) return hit('rate_limited', recentFromClient);
+  const links = (inq.message.match(LINK_RE) || []).length;
+  if (links > MAX_LINKS) return { spam: false, reason: 'suspect_links', detail: links };
   return { spam: false, reason: 'ok', detail: null };
+}
+
+/** "3 links" for a suspect screen, null otherwise. Used in the Slack line. */
+function suspectNote(screen) {
+  if (!screen || screen.spam || !screen.reason || screen.reason === 'ok') return null;
+  if (screen.reason === 'suspect_links') return screen.detail + ' links';
+  return screen.reason;
 }
 
 // ---------------------------------------------------------------------------
@@ -203,14 +218,30 @@ function decideStatus(screen, g) {
   if (screen && screen.spam) return 'Spam';
   if (!g) return 'Review';
   if (g.verdict === 'accept' && g.label === 'spam') return 'Spam';
+  if (suspectNote(screen)) return 'Review';      // a person looks before replying
   if (g.verdict === 'accept') return 'New';
   return 'Review';
+}
+
+/**
+ * The "Spam Reason" column: why a row is not plain New. Every reason that
+ * applies is kept, so a suspect inquiry whose label was also rejected says both.
+ */
+function spamReasonFor(screen, g) {
+  if (screen && screen.spam) return screen.reason + (screen.detail !== null && screen.detail !== undefined ? ' (' + screen.detail + ')' : '');
+  const parts = [];
+  if (g && g.verdict === 'accept' && g.label === 'spam') parts.push('model: spam');
+  const note = suspectNote(screen);
+  if (note) parts.push('suspect: ' + note);
+  if (g && g.verdict !== 'accept') parts.push('guard: ' + g.reason);
+  return parts.join('; ');
 }
 
 module.exports = {
   INQUIRY_LABELS, SIGNATURE_MAX_AGE_MS, MIN_FILL_MS, MAX_FILL_MS, MIN_MESSAGE_CHARS,
   MAX_MESSAGE_CHARS, MAX_LINKS, MAX_FROM_CLIENT_10MIN,
   hmacHex, verifySignature, normalizeInquiry, screenSpam, guardLabel, decideStatus,
+  suspectNote, spamReasonFor,
 };
 
 // --- CLI -------------------------------------------------------------------
@@ -228,6 +259,7 @@ if (require.main === module) {
       else if (r.op === 'screen') out = screenSpam(normalizeInquiry(r.form), r.now, r.recent || 0);
       else if (r.op === 'guard') out = guardLabel(r.llm_output, r.message);
       else if (r.op === 'status') out = { status: decideStatus(r.screen, r.guard) };
+      else if (r.op === 'reason') out = { reason: spamReasonFor(r.screen, r.guard), suspect: suspectNote(r.screen) };
       else throw new Error('unknown op ' + r.op);
       return Object.assign({ id: r.id }, out);
     });

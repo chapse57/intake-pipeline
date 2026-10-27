@@ -1,5 +1,5 @@
 """
-Emits the five importable n8n workflow files into n8n/workflows/.
+Emits the six importable n8n workflow files into n8n/workflows/.
 
     python3 n8n/build_workflows.py
 
@@ -267,12 +267,12 @@ class WF:
     def noop(self, name, pos):
         return self.add(name, "n8n-nodes-base.noOp", 1, {}, pos)
 
-    def dump(self, filename, error_workflow_note=True):
+    def dump(self, filename, error_workflow_note=True, settings=None):
         doc = {
             "name": self.name,
             "nodes": self.nodes,
             "connections": self.conns,
-            "settings": {"executionOrder": "v1"},
+            "settings": dict({"executionOrder": "v1"}, **(settings or {})),
             "pinData": {},
             "meta": {"templateCredsSetupCompleted": False},
         }
@@ -840,10 +840,8 @@ const s = $('Screen').first().json;
 const g = $('Guard').isExecuted ? $('Guard').first().json.guard : null;
 const status = decideStatus(s.screen, g);
 const rt = (x) => ({ rich_text: [{ text: { content: String(x == null ? '' : x).slice(0, 1900) } }] });
-let spamReason = '';
-if (s.screen.spam) spamReason = s.screen.reason + (s.screen.detail !== null ? ' (' + s.screen.detail + ')' : '');
-else if (g && g.verdict !== 'accept') spamReason = 'guard: ' + g.reason;
-else if (g && g.label === 'spam') spamReason = 'model: spam';
+const spamReason = spamReasonFor(s.screen, g);
+const suspect = suspectNote(s.screen);
 const label = s.screen.spam ? 'spam' : (g && g.label ? g.label : null);
 const properties = {
   Name: { title: [{ text: { content: String(s.name || s.email || 'unnamed').slice(0, 200) } }] },
@@ -860,7 +858,7 @@ const properties = {
   Received: { date: { start: new Date(s.received_at || Date.now()).toISOString() } },
   'Run ID': rt($execution.id),
 };
-return [{ json: { status, label, spam_reason: spamReason, name: s.name, email: s.email,
+return [{ json: { status, label, spam_reason: spamReason, suspect, name: s.name, email: s.email,
                   excerpt: s.message.slice(0, 300),
                   payload: { parent: { database_id: cfg.notion_inquiries_db }, properties } } }];
 """, (3080, 0), notes="A rejected label rejects the label, never the inquiry: the row is still written, as Review.")
@@ -875,7 +873,8 @@ return [{ json: { status, label, spam_reason: spamReason, name: s.name, email: s
     # 5. a person is told about anything that is not spam --------------------
     w.iff("Notify?", f"{B}.status !== 'Spam'", "true", "", (3740, 0), kind="boolean")
     w.slack("Slack: new inquiry",
-            f"':incoming_envelope: New inquiry - ' + {B}.status + ' / ' + ({B}.label || 'no label')"
+            f"({B}.suspect ? ':warning: ' + {B}.suspect + ' - could be spam, check before replying\\n' : '')"
+            f" + ':incoming_envelope: New inquiry - ' + {B}.status + ' / ' + ({B}.label || 'no label')"
             f" + '\\n' + {B}.name + ' <' + {B}.email + '>'"
             f" + '\\n' + {B}.excerpt"
             " + '\\n' + ($('Create inquiry').first().json.url || '')",
@@ -901,7 +900,75 @@ return [{ json: { status, label, spam_reason: spamReason, name: s.name, email: s
     return w.dump("WF-4_inquiry.json")
 
 
+# --------------------------------------------------------------------------
+# WF-5  Spam digest — what the screen kept out, once a day
+# --------------------------------------------------------------------------
+def build_digest():
+    w = WF("WF-5 Spam Digest")
+    DIG = js_body("digest.js")
+    # 09:00 Seoul. n8n does not catch up a run missed while the PC was off;
+    # the window below starts at the last digest that was sent, so the next
+    # one covers the gap instead.
+    w.add("Every day 09:00", "n8n-nodes-base.scheduleTrigger", 1.2,
+          {"rule": {"interval": [{"field": "cronExpression", "expression": "0 9 * * *"}]}}, (0, -100))
+    w.add("Manual", "n8n-nodes-base.manualTrigger", 1, {}, (0, 100))
+    w.config((220, 0))
+
+    w.code("Window", DIG + """
+// --- n8n wrapper ---
+// Static data survives between production runs (not manual ones).
+const sd = $getWorkflowStaticData('global');
+return [{ json: digestWindow(sd.last_digest_at, Date.now()) }];
+""", (440, 0), notes="Body generated from n8n/digest.js. Edit the file, not this node.")
+
+    W = "$('Window').first().json"
+    body = (
+        "={{ JSON.stringify({ page_size: 100,"
+        " filter: { and: ["
+        " { property: 'Status', select: { equals: 'Spam' } },"
+        f" {{ timestamp: 'created_time', created_time: {{ on_or_after: new Date({W}.since).toISOString() }} }},"
+        f" {{ timestamp: 'created_time', created_time: {{ before: new Date({W}.until).toISOString() }} }}"
+        " ] },"
+        " sorts: [ { timestamp: 'created_time', direction: 'ascending' } ] }) }}")
+    w.http("Spam since last digest", "POST",
+           f"={{{{ 'https://api.notion.com/v1/databases/' + {CFG}.notion_inquiries_db + '/query' }}}}",
+           body, (660, 0), cred="notion",
+           notes="Selected by created time, not Received: a held inquiry is created when it is delivered.")
+
+    w.code("Summarize", DIG + """
+// --- n8n wrapper ---
+const q = $('Spam since last digest').first().json || {};
+return [{ json: summarizeSpam(q.results || [], $('Window').first().json, q.has_more) }];
+""", (880, 0), notes="Body generated from n8n/digest.js. Edit the file, not this node.")
+
+    w.slack("Slack: digest", "$('Summarize').first().json.text", (1100, 0))
+
+    w.code("Mark sent", """
+// The window only moves on once Slack took the message: a failed post means
+// the next digest repeats these rows rather than losing them.
+const sd = $getWorkflowStaticData('global');
+const sent = !$json.error;
+if (sent) sd.last_digest_at = $('Window').first().json.until;
+return [{ json: { sent, last_digest_at: sd.last_digest_at || null } }];
+""", (1320, 0))
+
+    M = "$('Summarize').first().json"
+    w.log("Log: digest", "WF-5 Spam Digest", "digest",
+          "$('Mark sent').first().json.sent ? 'ok' : 'error'",
+          f"'spam=' + {M}.count + ({M}.has_more ? '+' : '')"
+          f" + ' | ' + {M}.by_reason.map(r => r[0] + ' ' + r[1]).join(', ')"
+          f" + ' | window=' + new Date({W}.since).toISOString() + ' .. ' + new Date({W}.until).toISOString()"
+          " + ' | slack=' + ($('Mark sent').first().json.sent ? 'sent' : 'failed')",
+          (1540, 0), title_js=f"'spam digest: ' + {M}.count")
+
+    w.chain("Every day 09:00", "Config")
+    w.chain("Manual", "Config")
+    w.chain("Config", "Window", "Spam since last digest", "Summarize", "Slack: digest", "Mark sent", "Log: digest")
+    return w.dump("WF-5_spam_digest.json", settings={"timezone": "Asia/Seoul"})
+
+
 if __name__ == "__main__":
-    for doc in (build_error(), build_intake(), build_dispatch(), build_complete(), build_inquiry()):
+    for doc in (build_error(), build_intake(), build_dispatch(), build_complete(), build_inquiry(),
+                build_digest()):
         print(f"{doc['name']:<20} {len(doc['nodes']):>2} nodes")
     print(f"-> {OUT.relative_to(ROOT)}/")

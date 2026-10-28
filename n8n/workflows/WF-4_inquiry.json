@@ -249,23 +249,6 @@
     },
     {
       "parameters": {
-        "respondWith": "json",
-        "responseBody": "={{ JSON.stringify({ ok: true }) }}",
-        "options": {
-          "responseCode": 202
-        }
-      },
-      "id": "3b582478-30b7-58b6-97fe-a440ce6fc6e9",
-      "name": "Respond: accepted",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.1,
-      "position": [
-        880,
-        0
-      ]
-    },
-    {
-      "parameters": {
         "method": "POST",
         "url": "https://api.notion.com/v1/pages",
         "options": {},
@@ -305,7 +288,9 @@
       "parameters": {
         "method": "POST",
         "url": "={{ 'https://api.notion.com/v1/databases/' + $('Config').first().json.notion_inquiries_db + '/query' }}",
-        "options": {},
+        "options": {
+          "timeout": 3000
+        },
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "notionApi",
         "sendHeaders": true,
@@ -425,7 +410,9 @@
       "parameters": {
         "method": "POST",
         "url": "https://api.anthropic.com/v1/messages",
-        "options": {},
+        "options": {
+          "timeout": 6000
+        },
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "anthropicApi",
         "sendHeaders": true,
@@ -564,7 +551,9 @@
       "parameters": {
         "method": "POST",
         "url": "https://api.notion.com/v1/pages",
-        "options": {},
+        "options": {
+          "timeout": 4000
+        },
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "notionApi",
         "sendHeaders": true,
@@ -594,6 +583,23 @@
           "name": "Notion account"
         }
       }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: true }) }}",
+        "options": {
+          "responseCode": 202
+        }
+      },
+      "id": "3b582478-30b7-58b6-97fe-a440ce6fc6e9",
+      "name": "Respond: accepted",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        3410,
+        -180
+      ]
     },
     {
       "parameters": {
@@ -773,7 +779,7 @@
       "main": [
         [
           {
-            "node": "Respond: accepted",
+            "node": "Log: auth",
             "type": "main",
             "index": 0
           }
@@ -792,17 +798,6 @@
         [
           {
             "node": "Log: auth rejected",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Respond: accepted": {
-      "main": [
-        [
-          {
-            "node": "Log: auth",
             "type": "main",
             "index": 0
           }
@@ -927,6 +922,17 @@
       ]
     },
     "Create inquiry": {
+      "main": [
+        [
+          {
+            "node": "Respond: accepted",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond: accepted": {
       "main": [
         [
           {

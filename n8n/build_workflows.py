@@ -143,8 +143,10 @@ class WF:
         return self.add(name, "n8n-nodes-base.code", 2, p, pos, **extra)
 
     def http(self, name, method, url, body_expr, pos, cred=None, headers=None,
-             on_error=None, notes=None):
+             on_error=None, notes=None, timeout_ms=None):
         p = {"method": method, "url": url, "options": {}}
+        if timeout_ms:
+            p["options"]["timeout"] = timeout_ms
         def c(type_, cred_def):
             name, cred_id = cred_def
             return {type_: {"id": cred_id or nid("cred", name), "name": name}}
@@ -181,10 +183,10 @@ class WF:
             extra["notes"] = notes
         return self.add(name, "n8n-nodes-base.httpRequest", 4.2, p, pos, **extra)
 
-    def notion_query(self, name, db_key, filter_js, pos):
+    def notion_query(self, name, db_key, filter_js, pos, timeout_ms=None):
         url = f"={{{{ 'https://api.notion.com/v1/databases/' + {CFG}.{db_key} + '/query' }}}}"
         body = f"={{{{ JSON.stringify({{ page_size: 100, filter: {filter_js} }}) }}}}"
-        return self.http(name, "POST", url, body, pos, cred="notion")
+        return self.http(name, "POST", url, body, pos, cred="notion", timeout_ms=timeout_ms)
 
     def notion_patch(self, name, page_id_js, props_js, pos):
         url = f"={{{{ 'https://api.notion.com/v1/pages/' + ({page_id_js}) }}}}"
@@ -729,6 +731,15 @@ return [{ json: { attempt: $runIndex + 1, error: String(msg).slice(0, 500) } }];
 # --------------------------------------------------------------------------
 # WF-4  Inquiry (public contact form)
 # --------------------------------------------------------------------------
+# The sender's "received" is sent only after the Notion row exists, so these
+# three calls sit between the relay's POST and its answer. Together they must
+# stay well inside the relay's forward timeout (worker/forward.js,
+# FORWARD_TIMEOUT_MS = 15 s), leaving room for the four Events writes on the
+# way. Measured on 2026-10-28 over five live runs: Claude ~1.1 s, each Notion
+# call 0.3-0.6 s, the row saved 3.3-4.9 s after the webhook fired.
+WF4_TIMEOUT_MS = {"Recent from client": 3000, "Claude: label": 6000, "Create inquiry": 4000}
+
+
 def build_inquiry():
     w = WF("WF-4 Inquiry")
     INQ = js_body("guard.js") + js_body("inquiry.js")
@@ -761,7 +772,6 @@ return [{ json: { auth_ok: auth.ok && !parseError, auth_reason: parseError || au
           f"'unsigned or bad request: ' + {V}.auth_reason",
           (1100, 250), title_js=f"'auth rejected ' + {V}.auth_reason")
 
-    w.respond("Respond: accepted", 202, "{ ok: true }", (880, 0))
     w.log("Log: auth", "WF-4 Inquiry", "auth", "'ok'", "'signed request accepted'",
           (1100, 0), title_js="'inquiry received'")
 
@@ -772,7 +782,7 @@ return [{ json: { auth_ok: auth.ok && !parseError, auth_reason: parseError || au
                    # 10 minutes before the sender pressed send, not before delivery:
                    # inquiries held overnight arrive together hours later
                    f" {{ property: 'Received', date: {{ on_or_after: new Date((Number({V}.form && {V}.form.received_at) || Date.now()) - 600000).toISOString() }} }} ] }}",
-                   (1320, 0))
+                   (1320, 0), timeout_ms=WF4_TIMEOUT_MS["Recent from client"])
 
     w.code("Screen", INQ + """
 // --- n8n wrapper ---
@@ -807,6 +817,7 @@ return [{ json: Object.assign({}, inq, { screen, recent_from_client: recent }) }
     # continues with { error } and the Guard turns that into a Review row.
     w.http("Claude: label", "POST", "https://api.anthropic.com/v1/messages",
            claude_body, (2200, 150), cred="anthropic", on_error="continueRegularOutput",
+           timeout_ms=WF4_TIMEOUT_MS["Claude: label"],
            notes="Same prefill trick as WF-1. Output is untrusted until the Guard node has looked at it. "
                  "On error the item carries { error } and the Guard stores the inquiry as Review.")
     w.log("Log: llm-label", "WF-4 Inquiry", "llm-label",
@@ -872,7 +883,13 @@ return [{ json: { status, label, spam_reason: spamReason, suspect, name: s.name,
 """, (3080, 0), notes="A rejected label rejects the label, never the inquiry: the row is still written, as Review.")
 
     w.http("Create inquiry", "POST", "https://api.notion.com/v1/pages",
-           "={{ JSON.stringify($json.payload) }}", (3300, 0), cred="notion")
+           "={{ JSON.stringify($json.payload) }}", (3300, 0), cred="notion",
+           timeout_ms=WF4_TIMEOUT_MS["Create inquiry"])
+    # Only now is the sender told it arrived. Anything that fails before this
+    # point (a Notion lookup or write, a code error) makes n8n answer 500
+    # "Error in workflow" (checked on 2.44.6), which the relay reads as
+    # downtime: the inquiry is held in the queue and delivered again later.
+    w.respond("Respond: accepted", 202, "{ ok: true }", (3410, -180))
     B = "$('Build inquiry').first().json"
     w.log("Log: notion-create", "WF-4 Inquiry", "notion-create", "'ok'",
           f"'status=' + {B}.status + ' label=' + {B}.label + ' spam_reason=' + {B}.spam_reason",
@@ -894,14 +911,14 @@ return [{ json: { status, label, spam_reason: spamReason, suspect, name: s.name,
     w.noop("No alert for spam", (3960, 150))
 
     w.chain("Webhook", "Config", "Verify", "Signed?")
-    w.link("Signed?", "Respond: accepted", out=0)
+    w.link("Signed?", "Log: auth", out=0)
     w.link("Signed?", "Respond: rejected", out=1)
     w.chain("Respond: rejected", "Log: auth rejected")
-    w.chain("Respond: accepted", "Log: auth", "Recent from client", "Screen", "Log: screen", "Spam?")
+    w.chain("Log: auth", "Recent from client", "Screen", "Log: screen", "Spam?")
     w.link("Spam?", "Build inquiry", out=0)
     w.link("Spam?", "Claude: label", out=1)
     w.chain("Claude: label", "Log: llm-label", "Guard", "Log: guard", "Build inquiry")
-    w.chain("Build inquiry", "Create inquiry", "Log: notion-create", "Notify?")
+    w.chain("Build inquiry", "Create inquiry", "Respond: accepted", "Log: notion-create", "Notify?")
     w.link("Notify?", "Slack: new inquiry", out=0)
     w.link("Notify?", "No alert for spam", out=1)
     w.chain("Slack: new inquiry", "Log: notify")

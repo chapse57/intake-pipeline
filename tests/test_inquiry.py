@@ -458,6 +458,53 @@ def test_I5_a_failed_model_call_does_not_stop_the_run(wf4):
         "the message is stored in full; only the label is missing"
 
 
+def _reachable(conns, start, without=()):
+    seen, todo = set(), [start]
+    while todo:
+        n = todo.pop()
+        if n in seen or n in without:
+            continue
+        seen.add(n)
+        for branch in conns.get(n, {"main": []})["main"]:
+            todo.extend(c["node"] for c in branch)
+    return seen
+
+
+def test_I5_received_is_answered_only_after_the_row_is_saved():
+    """The relay holds an inquiry only when n8n does not answer 2xx. If n8n
+    said "received" before the Notion write, a failed write would lose the
+    inquiry after the sender was told it arrived. So the accepted response
+    must be unreachable unless Create inquiry ran first, on both branches."""
+    with open(WF4, encoding="utf-8") as f:
+        conns = json.load(f)["connections"]
+    assert "Respond: accepted" in _reachable(conns, "Webhook")
+    assert "Respond: accepted" not in _reachable(conns, "Webhook", without={"Create inquiry"}), \
+        "there is a path to 'received' that skips the Notion write"
+    assert conns["Create inquiry"]["main"][0][0]["node"] == "Respond: accepted"
+    for out in (0, 1):                     # spam and not-spam both end in the response
+        start = conns["Spam?"]["main"][out][0]["node"]
+        assert "Respond: accepted" in _reachable(conns, start)
+    assert "Respond: accepted" not in _reachable(conns, "Respond: rejected")
+
+
+def test_I5_the_calls_before_the_answer_fit_inside_the_relay_timeout(wf4):
+    """Every call between the relay's POST and n8n's answer has its own
+    timeout, and together they leave room inside the relay's forward timeout.
+    Past it the relay holds the inquiry and n8n may still save it: a
+    duplicate row, never a lost one, but it should not be the normal case."""
+    import re
+    src = (ROOT / "worker" / "forward.js").read_text(encoding="utf-8")
+    forward_ms = int(re.search(r"FORWARD_TIMEOUT_MS\s*=\s*([\d_]+)", src).group(1).replace("_", ""))
+    budget = 0
+    for name in ("Recent from client", "Claude: label", "Create inquiry"):
+        t = wf4[name]["parameters"]["options"].get("timeout")
+        assert isinstance(t, int) and t > 0, f"{name} has no timeout"
+        budget += t
+    assert budget <= forward_ms - 2000, (budget, forward_ms)
+    assert wf4["Create inquiry"].get("onError") is None, \
+        "a failed write must fail the run, so n8n answers 500 and the relay keeps the inquiry"
+
+
 def test_I5_code_nodes_carry_the_current_inquiry_js(wf4):
     src = (ROOT / "n8n" / "inquiry.js").read_text(encoding="utf-8")
     head = src[:src.index("module.exports")]

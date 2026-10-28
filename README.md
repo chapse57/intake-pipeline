@@ -591,8 +591,32 @@ no Slack message, and nothing for the queue to hold because n8n had already
 answered. The node now continues on error, the Guard records
 `model_unavailable` instead of a parse failure, and the inquiry is stored as
 Review with no label for a person to label by hand
-(`test_I5_a_failed_model_call_does_not_stop_the_run`). A failed Notion write
-is a separate problem and is handled in the next change.
+(`test_I5_a_failed_model_call_does_not_stop_the_run`).
+
+**Why "received" waits for the Notion row (changed 2026-10-28).** Until this
+date n8n answered the relay right after the signature check. The relay only
+holds an inquiry when n8n does *not* answer 2xx, so a Notion lookup or write
+that failed later left an inquiry the sender had been told was received, with
+no row and nothing in the queue. Now `Respond: accepted` comes after
+`Create inquiry`. If anything before it fails, n8n 2.44.6 answers
+`500 {"message":"Error in workflow"}` (checked with a throwaway workflow the
+same day), the relay reads 500 as downtime, holds the inquiry and the
+5-minute check delivers it again; WF-0 posts the failure to Slack.
+
+- The sender now waits for the row: 3.3–4.9 s from webhook to saved row over
+  the last five live runs (Claude ~1.1 s, each Notion call 0.3–0.6 s), instead
+  of about 0.1 s.
+- The three calls in that window have timeouts (Notion lookup 3 s, Claude 6 s,
+  Notion write 4 s) that together stay 2 s inside the relay's 15 s forward
+  timeout (`test_I5_the_calls_before_the_answer_fit_inside_the_relay_timeout`).
+  If the relay still times out, it holds a copy while n8n may finish the run:
+  a duplicate row, not a lost one.
+- A retried inquiry writes its Events rows (auth, screen, label, guard) again,
+  and calls the model again. The repeat rows are the record of the retry.
+- Known limit: an inquiry whose run fails every time (not just while Notion is
+  down) keeps answering 500, so the queue retries it every 5 minutes and the
+  ones behind it wait; WF-0 posts each failure to Slack, so it is loud, not
+  silent. Setting such an item aside is a Worker change, not made yet.
 
 **Why inquiries are held, not refused (added 2026-10-27).** The first three
 days put numbers on "it will go down": 783 checks, 37% answered, 9 outages,

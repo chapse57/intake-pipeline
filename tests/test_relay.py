@@ -225,6 +225,11 @@ const out = {};
   out.R4.timeout_status = res2.status; out.R4.held_after_timeout = qkeys(kv).length;
   const refused = await relay.fetch(post(form('n8n up but refusing.')), env, {}, async () => new Response('', { status: 401 }));
   out.R4.refused_status = refused.status; out.R4.held_after_refusal = qkeys(kv).length;
+  // n8n is up but the run failed before its answer (a Notion write failed):
+  // n8n 2.44.6 answers 500 {"message":"Error in workflow"}
+  const failed = await relay.fetch(post(form('Notion was down when this came in.')), env, {},
+    async () => new Response('{"message":"Error in workflow"}', { status: 500 }));
+  out.R4.run_failed_status = failed.status; out.R4.held_after_run_failed = qkeys(kv).length;
 }
 
 // R4c: a bot posting all night cannot spend the KV write quota
@@ -334,6 +339,14 @@ def test_R4_a_timeout_is_held_but_a_refusal_is_not(queue_run):
     assert (r["timeout_status"], r["held_after_timeout"]) == (202, 2)
     assert (r["refused_status"], r["held_after_refusal"]) == (400, 2), \
         "n8n up and answering 401 is a config fault; queueing it would only fail again"
+
+
+def test_R4_a_run_that_fails_before_saving_is_held(queue_run):
+    """WF-4 answers only after the Notion row exists, so a failed write
+    reaches the relay as n8n's 500. That must be held like downtime: the
+    sender sees "received" and the 5-minute check delivers it again."""
+    r = queue_run["R4"]
+    assert (r["run_failed_status"], r["held_after_run_failed"]) == (202, 3)
 
 
 def test_R4_the_queue_is_capped_so_a_bot_cannot_use_up_kv(queue_run):

@@ -27,3 +27,6 @@ push-logo.bat
 # one-off commit helper for the 2026-10-28 WF-4 model-failure push
 push-modelfail.bat
 COMMIT_MSG_MODELFAIL.txt
+# one-off commit helper for the 2026-10-28 WF-4 respond-after-save push
+push-respond.bat
+COMMIT_MSG_RESPOND.txt

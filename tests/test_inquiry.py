@@ -238,6 +238,14 @@ def test_I3_an_injected_instruction_cannot_widen_the_label_set(run_inquiry):
     assert r["reason"] == "label_not_allowed"
 
 
+def test_I3_a_failed_model_call_is_its_own_reason_not_a_parse_error(run_inquiry):
+    r = run_inquiry([{"id": "e", "op": "model_failed", "error": {"message": "529 overloaded"}},
+                     {"id": "bare", "op": "model_failed", "error": {}}])
+    assert (r["e"]["verdict"], r["e"]["reason"], r["e"]["label"]) == ("reject", "model_unavailable", None)
+    assert r["e"]["detail"] == "529 overloaded"
+    assert r["bare"]["reason"] == "model_unavailable" and r["bare"]["detail"] == "no message"
+
+
 # --------------------------------------------------------------------------
 # I4 status
 # --------------------------------------------------------------------------
@@ -425,6 +433,29 @@ def test_I5_an_unsigned_request_never_reaches_the_model(wf4):
         for branch in conns.get(n, {"main": []})["main"]:
             todo.extend(c["node"] for c in branch)
     assert "Claude: label" not in seen and "Create inquiry" not in seen
+
+
+def test_I5_a_failed_model_call_does_not_stop_the_run(wf4):
+    """The sender has already been told "received" by the time Claude is
+    called, so a failed call (no credit, 529, timeout) must end in a Review
+    row, not in a stopped execution that only the n8n log knows about."""
+    assert wf4["Claude: label"].get("onError") == "continueRegularOutput", \
+        "the HTTP node must hand { error } to the Guard instead of stopping the run"
+    screen_out = {"name": "Dana", "email": "d@x.io", "message": MSG, "message_stored": MSG,
+                  "message_truncated": False, "budget": "", "timeline": "", "client": "c",
+                  "screen": {"spam": False, "reason": "ok", "detail": None}}
+    failed = {"error": {"message": "529 Overloaded", "description": "overloaded_error"}}
+    guard_out = _run_node_js(wf4["Guard"]["parameters"]["jsCode"],
+                             {"Screen": screen_out, "Claude: label": failed})
+    assert guard_out["guard"]["verdict"] == "reject"
+    assert guard_out["guard"]["reason"] == "model_unavailable"
+    assert guard_out["guard"]["detail"] == "529 Overloaded"
+    out = _run_node_js(wf4["Build inquiry"]["parameters"]["jsCode"],
+                       {"Config": {"notion_inquiries_db": "DB"}, "Screen": screen_out, "Guard": guard_out})
+    assert out["status"] == "Review" and out["payload"]["properties"]["Label"] == {"select": None}
+    assert out["spam_reason"] == "guard: model_unavailable"
+    assert out["payload"]["properties"]["Message"]["rich_text"][0]["text"]["content"] == MSG, \
+        "the message is stored in full; only the label is missing"
 
 
 def test_I5_code_nodes_carry_the_current_inquiry_js(wf4):

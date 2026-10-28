@@ -211,6 +211,19 @@ function guardLabel(llmOutput, message) {
 }
 
 /**
+ * The model call itself failed (no credit, 529 overloaded, timeout, network).
+ * That is not a verdict on the label, so it gets its own reason: the inquiry
+ * is stored as Review with no label and a person labels it. Without this the
+ * run stopped at the HTTP node, after the sender had already been told
+ * "received", and the inquiry existed only in the n8n execution log.
+ */
+function modelUnavailable(err) {
+  const e = err && typeof err === 'object' ? err : {};
+  const msg = e.message || e.description || (typeof err === 'string' ? err : '') || 'no message';
+  return rejectLabel('model_unavailable', String(msg).slice(0, 200));
+}
+
+/**
  * What the Inquiries row says. A rejected label rejects the label, never the
  * inquiry: the row is still written, as Review, for a person to read.
  */
@@ -240,8 +253,8 @@ function spamReasonFor(screen, g) {
 module.exports = {
   INQUIRY_LABELS, SIGNATURE_MAX_AGE_MS, MIN_FILL_MS, MAX_FILL_MS, MIN_MESSAGE_CHARS,
   MAX_MESSAGE_CHARS, MAX_LINKS, MAX_FROM_CLIENT_10MIN,
-  hmacHex, verifySignature, normalizeInquiry, screenSpam, guardLabel, decideStatus,
-  suspectNote, spamReasonFor,
+  hmacHex, verifySignature, normalizeInquiry, screenSpam, guardLabel, modelUnavailable,
+  decideStatus, suspectNote, spamReasonFor,
 };
 
 // --- CLI -------------------------------------------------------------------
@@ -258,6 +271,7 @@ if (require.main === module) {
       else if (r.op === 'normalize') out = normalizeInquiry(r.form);
       else if (r.op === 'screen') out = screenSpam(normalizeInquiry(r.form), r.now, r.recent || 0);
       else if (r.op === 'guard') out = guardLabel(r.llm_output, r.message);
+      else if (r.op === 'model_failed') out = modelUnavailable(r.error);
       else if (r.op === 'status') out = { status: decideStatus(r.screen, r.guard) };
       else if (r.op === 'reason') out = { reason: spamReasonFor(r.screen, r.guard), suspect: suspectNote(r.screen) };
       else throw new Error('unknown op ' + r.op);

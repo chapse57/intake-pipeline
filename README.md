@@ -582,6 +582,18 @@ fails); below 100 characters only the 300-character cap applies, so a
 one-line message can be quoted almost whole. The exact message is a regression
 test (`test_I3_a_short_inquiry…`).
 
+**Why a failed model call is a Review row, not a stopped run (changed
+2026-10-28).** The sender is told "received" as soon as the signature checks
+out, before the model is called. Until this date the `Claude: label` node
+stopped the execution on any HTTP error (no credit, 529 overloaded, timeout),
+so an inquiry that hit one existed only in n8n's execution log: no Notion row,
+no Slack message, and nothing for the queue to hold because n8n had already
+answered. The node now continues on error, the Guard records
+`model_unavailable` instead of a parse failure, and the inquiry is stored as
+Review with no label for a person to label by hand
+(`test_I5_a_failed_model_call_does_not_stop_the_run`). A failed Notion write
+is a separate problem and is handled in the next change.
+
 **Why inquiries are held, not refused (added 2026-10-27).** The first three
 days put numbers on "it will go down": 783 checks, 37% answered, 9 outages,
 2,465 minutes down, most of it overnight because the PC is switched off. Until

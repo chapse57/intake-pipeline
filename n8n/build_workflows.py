@@ -802,12 +802,18 @@ return [{ json: Object.assign({}, inq, { screen, recent_from_client: recent }) }
         "    { role: 'assistant', content: '{' }\n"
         "  ]\n"
         "}) }}")
+    # The model call may fail (no credit, overloaded, timeout). The sender was
+    # already told "received", so the run must not stop here: the node
+    # continues with { error } and the Guard turns that into a Review row.
     w.http("Claude: label", "POST", "https://api.anthropic.com/v1/messages",
-           claude_body, (2200, 150), cred="anthropic",
-           notes="Same prefill trick as WF-1. Output is untrusted until the Guard node has looked at it.")
-    w.log("Log: llm-label", "WF-4 Inquiry", "llm-label", "'ok'",
-          "(($json.content || []).map(b => b.text || '').join('')) + ' | model=' + ($json.model || '')"
-          " + ' | in=' + (($json.usage || {}).input_tokens || 0) + ' out=' + (($json.usage || {}).output_tokens || 0)",
+           claude_body, (2200, 150), cred="anthropic", on_error="continueRegularOutput",
+           notes="Same prefill trick as WF-1. Output is untrusted until the Guard node has looked at it. "
+                 "On error the item carries { error } and the Guard stores the inquiry as Review.")
+    w.log("Log: llm-label", "WF-4 Inquiry", "llm-label",
+          "$json.error ? 'error' : 'ok'",
+          "$json.error ? ('model failed: ' + ($json.error.message || JSON.stringify($json.error)).slice(0, 300))"
+          " : ((($json.content || []).map(b => b.text || '').join('')) + ' | model=' + ($json.model || '')"
+          " + ' | in=' + (($json.usage || {}).input_tokens || 0) + ' out=' + (($json.usage || {}).output_tokens || 0))",
           (2420, 150), title_js="'llm label'")
 
     w.code("Guard", INQ + """
@@ -821,7 +827,9 @@ let text = raw.startsWith('{') ? raw : '{' + raw;
 const stripped = text.replace(/^```(?:json)?\\s*/i, '').replace(/\\s*```$/, '');
 const fence_stripped = stripped !== text;
 text = stripped;
-const g = guardLabel(text, s.message);
+// The HTTP node continues on error with { error }: no label was proposed, so
+// the inquiry goes to Review with its own reason instead of a parse failure.
+const g = resp.error ? modelUnavailable(resp.error) : guardLabel(text, s.message);
 return [{ json: Object.assign({}, s, { llm_raw: raw, llm_fence_stripped: fence_stripped, guard: g }) }];
 """, (2640, 150), notes="Body generated from n8n/guard.js + n8n/inquiry.js. Edit the files, not this node.")
     w.log("Log: guard", "WF-4 Inquiry", "guard",

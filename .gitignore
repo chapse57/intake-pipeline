@@ -30,3 +30,6 @@ COMMIT_MSG_MODELFAIL.txt
 # one-off commit helper for the 2026-10-28 WF-4 respond-after-save push
 push-respond.bat
 COMMIT_MSG_RESPOND.txt
+# one-off commit helper for the 2026-10-28 page copy push
+push-page.bat
+COMMIT_MSG_PAGE.txt

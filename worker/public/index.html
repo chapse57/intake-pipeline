@@ -3,15 +3,15 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Lampas — A contact form setup that tells you when it breaks</title>
-<meta name="description" content="I set up form intake for web agencies and small B2B firms. It runs on this page first, so you can try it yourself.">
+<title>Lampas</title>
+<meta name="description" content="I set up form intake for web agencies and small B2B firms. It runs on this page first so you can try it yourself.">
 <meta name="robots" content="index, follow">
 <link rel="canonical" href="https://lampasworks.com/">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://lampasworks.com/">
 <meta property="og:site_name" content="Lampas">
-<meta property="og:title" content="Lampas — A contact form setup that tells you when it breaks">
-<meta property="og:description" content="I set up form intake for web agencies and small B2B firms. It runs on this page first, so you can try it yourself.">
+<meta property="og:title" content="A contact form setup that tells you when it breaks">
+<meta property="og:description" content="I set up form intake for web agencies and small B2B firms. It runs on this page first so you can try it yourself.">
 <meta property="og:image" content="https://lampasworks.com/og.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="627">
@@ -45,7 +45,7 @@
   .what li { display: flex; gap: 12px; align-items: baseline; }
   .what b { font-weight: 600; }
   .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--blue); flex: none; transform: translateY(-1px); }
-  .what span.d { color: var(--muted); }
+  .what span.d { color: var(--muted); display: block; margin-top: 2px; }
   .proof { color: var(--muted); font-size: 15px; margin: 28px 0 0; max-width: 34em; }
   .proof a { color: var(--blue); }
   .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 28px; }
@@ -94,20 +94,19 @@
   <div class="grid">
     <section>
       <h1>A contact form setup that tells you when it breaks.</h1>
-      <p class="lede">I set up form intake for web agencies and small B2B firms. It runs on this page first, so you can try it yourself.</p>
+      <p class="lede">I set up form intake for web agencies and small B2B firms. It runs on this page first so you can try it yourself.</p>
       <ul class="what">
-        <li><span class="dot"></span><span><b>Saved first</b> <span class="d">— every inquiry is stored in Notion before anything else runs</span></span></li>
-        <li><span class="dot"></span><span><b>Spam screened</b> <span class="d">— unclear ones go to review, not the bin</span></span></li>
-        <li><span class="dot"></span><span><b>Alerts</b> <span class="d">— a Slack message for each new inquiry</span></span></li>
-        <li><span class="dot"></span><span><b>Held during outages</b> <span class="d">— delivered when the backend is back</span></span></li>
-        <li><span class="dot"></span><span><b>Watched from outside</b> <span class="d">— a health check every 5 minutes, down and back-up alerts, a daily spam digest</span></span></li>
+        <li><span class="dot"></span><span><b>Saved or held</b> <span class="d">The sender is thanked only once the inquiry is in Notion or held until the backend is back</span></span></li>
+        <li><span class="dot"></span><span><b>Spam screened</b> <span class="d">Unclear ones go to review instead of the bin</span></span></li>
+        <li><span class="dot"></span><span><b>Alerts</b> <span class="d">A Slack message for each inquiry that is not spam</span></span></li>
+        <li><span class="dot"></span><span><b>Watched from outside</b> <span class="d">A health check every 5 minutes, down and back-up alerts and a daily spam digest</span></span></li>
       </ul>
       <p class="proof">Build notes and the operations log are on <a href="https://github.com/chapse57/intake-pipeline">GitHub</a>.</p>
     </section>
 
     <section class="card">
       <h2>Send an inquiry</h2>
-      <p class="sub">Where do your leads come from, and where should they go?</p>
+      <p class="sub">Where do your leads come from and where should they go?</p>
       <form id="f" novalidate>
         <div class="row">
           <div class="field"><label for="name">Name</label><input id="name" name="name" autocomplete="name" required maxlength="200"></div>
@@ -126,7 +125,7 @@
     </section>
   </div>
 
-  <footer>© 2026 Lampas · Seoul</footer>
+  <footer>© 2026 Lampas. Based in Seoul.</footer>
 </div>
 <script>
   // Opened-at time travels with the form: a bot that posts within a few
@@ -153,7 +152,7 @@
       });
       if (res.ok) {
         form.reset();
-        show('ok', 'Thanks — your message is in. I will reply by email.');
+        show('ok', 'Thanks. Your message is in and I will reply by email.');
       } else if (res.status === 503) {
         show('err', 'The form is offline for a moment. Please try again a little later.');
       } else {

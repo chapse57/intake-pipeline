@@ -20,3 +20,5 @@ deploy/*.env
 node_modules/
 # one-off commit helper for the 2026-10-24 push
 push-wf4.bat
+# one-off commit helper for the 2026-10-28 Fix #3 push
+push-fix3.bat

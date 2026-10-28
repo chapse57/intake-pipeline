@@ -67,6 +67,7 @@ worker/
   monitor.js          5-minute health check of n8n; Slack on down/up; /api/status
 deploy/
   docker-compose.yml  self-hosted n8n (free Community edition) + ngrok static domain
+  Caddyfile           the gate the tunnel points at: only the inquiry webhook and /healthz pass
   *.bat               one-click setup steps on the Windows host; secrets stay in deploy/*.env
 docusign/
   build_contracts.py        generates the four role contracts as PDFs
@@ -555,6 +556,22 @@ the Worker's Cron Trigger checks `/healthz` from outside every 5 minutes, two
 misses declare an outage, and Slack hears exactly twice per outage — down, and
 back up with the duration. `/api/status` serves checks, failed checks, incidents
 and total minutes down.
+
+**Why a gate in front of n8n (Fix #3, 2026-10-28).** Until this date the ngrok
+tunnel forwarded everything to `n8n:5678`, so the n8n sign-in page, REST API,
+test webhooks and forms were reachable from the internet through the tunnel,
+even though the PC's own port is bound to 127.0.0.1. The tunnel now points at a
+Caddy container (`deploy/Caddyfile`) that passes exactly two routes,
+`POST /webhook/inquiry` and `/healthz`, and answers 404 to everything else. The
+Worker already reads 404 and 5xx as "n8n is down", so a broken gate holds
+inquiries in the queue instead of dropping them. Checked on 2026-10-28 by
+`deploy/apply-fix3.bat` through the public tunnel address: `/healthz` 200;
+`/`, `/signin`, `/rest/settings`, `/webhook-test/inquiry` and
+`GET /webhook/inquiry` 404; an unsigned `POST /webhook/inquiry` reached n8n and
+got its 401 (one `auth rejected` Events row, counted as test traffic). One
+signed TEST inquiry then ran end to end through the gate: auth, screen, Claude
+label, guard accept, Notion row, Slack sent (Run ID 12). n8n was 2.44.6 at the
+time; the image is still `latest` and gets pinned in a separate change.
 
 **First live run (2026-10-24).** Claude labelled a 102-character inquiry
 correctly and quoted a 66-character clause; the guard rejected it, because

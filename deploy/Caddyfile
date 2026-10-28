@@ -1,0 +1,28 @@
+# Gate in front of n8n (Fix #3).
+# The ngrok tunnel points here, not at n8n, so only the two paths the Worker
+# needs are public: POST /webhook/inquiry and GET /healthz. The editor, login,
+# REST API, test webhooks and forms answer 404 from outside.
+# The editor stays on http://localhost:5678 on this PC.
+#
+# Fails safe: the Worker reads 404 and 5xx as "n8n is down" and holds the
+# inquiry in the queue, so a mistake here delays inquiries, it does not drop them.
+{
+	admin off
+	auto_https off
+}
+
+:8080 {
+	@inquiry {
+		method POST
+		path /webhook/inquiry
+	}
+	handle @inquiry {
+		reverse_proxy n8n:5678
+	}
+	handle /healthz {
+		reverse_proxy n8n:5678
+	}
+	handle {
+		respond 404
+	}
+}

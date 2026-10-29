@@ -33,3 +33,6 @@ COMMIT_MSG_RESPOND.txt
 # one-off commit helper for the 2026-10-28 page copy push
 push-page.bat
 COMMIT_MSG_PAGE.txt
+# one-off commit helper for the 2026-10-29 headline push
+push-copy.bat
+COMMIT_MSG_COPY.txt
